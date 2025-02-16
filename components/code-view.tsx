@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Folder, Github, Search } from "lucide-react";
+import { ChevronLeft, Folder, Github } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { AgentsSection } from "./agents-section";
@@ -11,12 +11,14 @@ import { InsightsSection } from "./insights-section";
 import { LoginButton } from "./login-button";
 import { RepositoryList } from "./repository-list";
 import { SecuritySection } from "./security-section";
-import { Input } from "./ui/input";
 
 interface RepoItem {
   name: string;
-  type: string;
+  type: "file" | "dir" | "image";
   path: string;
+  url?: string;
+  content?: string;
+  children?: RepoItem[];
 }
 
 export default function Component() {
@@ -24,6 +26,8 @@ export default function Component() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState("");
   const [fileContent, setFileContent] = useState<string[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [activeSection, setActiveSection] = useState("code");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -37,13 +41,16 @@ export default function Component() {
     setCurrentPath("");
     setNavHistory([]);
     setFileContent([]);
+    setImageUrl("");
     await fetchRepoStructure(fullName);
   };
 
-  // Modifica la función fetchRepoStructure
-  const fetchRepoStructure = async (repo?: string, path: string = "") => {
+  const fetchRepoStructure = async (
+    repo?: string,
+    path: string = ""
+  ): Promise<RepoItem[]> => {
     const targetRepo = repo || selectedRepo;
-    if (!targetRepo) return;
+    if (!targetRepo) return [];
 
     try {
       const response = await fetch(
@@ -56,17 +63,33 @@ export default function Component() {
         }
       );
 
+      if (!response.ok) throw new Error("Error al obtener la estructura");
       const data = await response.json();
+
       const structure = await Promise.all(
         data.map(async (item: any) => {
           if (item.type === "file") {
-            const fileContentResponse = await fetch(item.download_url);
-            const fileContent = await fileContentResponse.text();
+            const fileExtension =
+              item.name.split(".").pop()?.toLowerCase() || "";
+            const isImage = [
+              "jpg",
+              "jpeg",
+              "png",
+              "gif",
+              "bmp",
+              "webp",
+            ].includes(fileExtension);
+
             return {
               name: item.name,
-              type: item.type,
+              type: isImage ? "image" : "file",
               path: item.path,
-              content: fileContent,
+              url: isImage
+                ? `https://raw.githubusercontent.com/${targetRepo}/master/${item.path}`
+                : item.download_url,
+              content: isImage
+                ? ""
+                : await fetch(item.download_url).then((res) => res.text()),
             };
           } else if (item.type === "dir") {
             const subDirStructure = await fetchRepoStructure(
@@ -75,27 +98,32 @@ export default function Component() {
             );
             return {
               name: item.name,
-              type: item.type,
+              type: "dir",
               path: item.path,
               children: subDirStructure,
             };
           }
+          return null;
         })
       );
 
-      // Actualiza el estado con la estructura obtenida
-      setRepoStructure((prev) => [...prev, ...structure.filter(Boolean)]);
-      return structure;
+      const filteredStructure = structure.filter(
+        (item): item is RepoItem => item !== null
+      );
+      setRepoStructure(filteredStructure);
+      return filteredStructure;
     } catch (error) {
-      console.error("Error fetching repo structure:", error);
+      console.error("Error:", error);
       return [];
     }
   };
 
   const handlePathChange = async (newPath: string) => {
+    if (!selectedRepo) return;
     setNavHistory((prev) => [...prev, currentPath]);
     setCurrentPath(newPath);
-    await fetchRepoStructure(undefined, newPath);
+    setImageUrl("");
+    await fetchRepoStructure(selectedRepo, newPath);
   };
 
   useEffect(() => {
@@ -137,17 +165,14 @@ export default function Component() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
 
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
-                <Input
-                  className="pl-9 bg-[#0d1117] border-[#30363d] h-8 text-sm"
-                  placeholder="Find a repository"
-                />
-              </div>
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] pb-4">
                 <RepositoryList
                   onRepoSelect={handleRepoSelect}
-                  onFileSelect={setFileContent}
+                  onFileSelect={(content, url, name) => {
+                    setFileContent(content);
+                    setImageUrl(url);
+                    setFileName(name);
+                  }}
                   currentPath={currentPath}
                   onPathChange={handlePathChange}
                   selectedRepo={selectedRepo}
@@ -174,8 +199,20 @@ export default function Component() {
             <div className="h-full space-y-6 max-w-6xl mx-auto">
               {activeSection === "code" && (
                 <>
-                  {fileContent.length > 0 ? (
-                    <CodeViewer content={fileContent} />
+                  {imageUrl ? (
+                    <CodeViewer
+                      content={[]}
+                      imageSrc={imageUrl}
+                      fileName={fileName}
+                      filePath={currentPath}
+                      githubToken={session.accessToken}
+                    />
+                  ) : fileContent.length > 0 ? (
+                    <CodeViewer
+                      content={fileContent}
+                      fileName={fileName}
+                      filePath={currentPath}
+                    />
                   ) : selectedRepo ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400">
                       <Folder className="h-16 w-16 mb-4" />

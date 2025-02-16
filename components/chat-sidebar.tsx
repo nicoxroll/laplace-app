@@ -43,7 +43,10 @@ export default function ChatSidebar({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
+  // En el componente ChatSidebar, modifica la función getRepoContext
   const getRepoContext = () => {
+    console.log("Debug - repoData:", JSON.stringify(repoData, null, 2)); // <-- Agregar logging
+
     if (!repoData.selectedRepo) return "No hay repositorio seleccionado";
 
     const formatStructure = (structure: RepoItem[]): string => {
@@ -57,20 +60,59 @@ export default function ChatSidebar({
         .join("\n");
     };
 
-    return `
-  Repositorio actual: ${repoData.selectedRepo}
-  Ruta actual: ${repoData.currentPath || "root"}
-  
-  Estructura del repositorio:
-  ${formatStructure(repoData.repoStructure)}
-  
-  Contenido del archivo actual:
-  ${repoData.fileContent.join("\n").slice(0, 2000)}${
-      repoData.fileContent.join("\n").length > 2000 ? "..." : ""
-    }
-  `;
+    // Agregar más detalles de debug
+    const debugInfo = `
+=== Debug Information ===
+Repositorio actual: ${repoData.selectedRepo || "Ninguno"}
+Ruta actual: ${repoData.currentPath || "root"}
+Archivo actual: ${repoData.fileContent.length} líneas
+Estructura del repositorio: ${repoData.repoStructure.length} elementos
+=========================
+`;
+
+    return (
+      debugInfo +
+      `
+Contexto del repositorio:
+${formatStructure(repoData.repoStructure)}
+
+Contenido del archivo actual:
+${repoData.fileContent.join("\n").slice(0, 2000)}${
+        repoData.fileContent.join("\n").length > 2000 ? "..." : ""
+      }
+`
+    );
   };
 
+  // Modificar el renderizado de mensajes para mostrar más información
+  {
+    messages.map((msg, i) => {
+      if (msg.role === "system") return null;
+      return (
+        <div
+          key={i}
+          className={`p-2 mb-2 rounded-lg ${
+            msg.role === "user" ? "bg-[#161b22] ml-6" : "bg-[#21262d] mr-6"
+          }`}
+        >
+          {msg.role === "assistant" && (
+            <div className="text-xs text-gray-400 mb-1">
+              Contexto usado: {repoData.selectedRepo || "Ninguno"} -{" "}
+              {repoData.currentPath || "root"} | Estructura:{" "}
+              {repoData.repoStructure.length} elementos | Archivo:{" "}
+              {repoData.fileContent.length} líneas
+            </div>
+          )}
+          <div
+            className="text-sm prose prose-invert"
+            dangerouslySetInnerHTML={{
+              __html: msg.content.replace(/\n/g, "<br />"),
+            }}
+          />
+        </div>
+      );
+    });
+  }
   const startResizing = (e: React.MouseEvent) => {
     setIsResizing(true);
     document.body.style.cursor = "ew-resize"; // Cambia cursor en todo el body
@@ -223,7 +265,7 @@ export default function ChatSidebar({
                 {msg.role === "assistant" && repoData.selectedRepo && (
                   <div className="text-xs text-gray-400 mb-1">
                     Contexto usado: {repoData.selectedRepo} -{" "}
-                    {repoData.currentPath || "root"}
+                    {repoData.currentPath || "master"}
                   </div>
                 )}
                 <div
