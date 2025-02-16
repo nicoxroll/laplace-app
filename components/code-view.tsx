@@ -40,6 +40,7 @@ export default function Component() {
     await fetchRepoStructure(fullName);
   };
 
+  // Modifica la función fetchRepoStructure
   const fetchRepoStructure = async (repo?: string, path: string = "") => {
     const targetRepo = repo || selectedRepo;
     if (!targetRepo) return;
@@ -56,14 +57,38 @@ export default function Component() {
       );
 
       const data = await response.json();
-      const structure = data.map((item: any) => ({
-        name: item.name,
-        type: item.type,
-        path: item.path,
-      }));
-      setRepoStructure(structure);
+      const structure = await Promise.all(
+        data.map(async (item: any) => {
+          if (item.type === "file") {
+            const fileContentResponse = await fetch(item.download_url);
+            const fileContent = await fileContentResponse.text();
+            return {
+              name: item.name,
+              type: item.type,
+              path: item.path,
+              content: fileContent,
+            };
+          } else if (item.type === "dir") {
+            const subDirStructure = await fetchRepoStructure(
+              targetRepo,
+              item.path
+            );
+            return {
+              name: item.name,
+              type: item.type,
+              path: item.path,
+              children: subDirStructure,
+            };
+          }
+        })
+      );
+
+      // Actualiza el estado con la estructura obtenida
+      setRepoStructure((prev) => [...prev, ...structure.filter(Boolean)]);
+      return structure;
     } catch (error) {
       console.error("Error fetching repo structure:", error);
+      return [];
     }
   };
 
@@ -75,7 +100,11 @@ export default function Component() {
 
   useEffect(() => {
     if (selectedRepo) {
-      fetchRepoStructure(selectedRepo, currentPath);
+      const loadStructure = async () => {
+        const structure = await fetchRepoStructure(selectedRepo, currentPath);
+        setRepoStructure(structure || []);
+      };
+      loadStructure();
     }
   }, [selectedRepo, currentPath]);
 
