@@ -11,7 +11,6 @@ import {
   Menu,
   Plus,
   Settings,
-  Share2,
   Shield,
 } from "lucide-react";
 import { Session } from "next-auth";
@@ -30,7 +29,7 @@ export function Header({
   onSectionChange,
 }: HeaderProps) {
   return (
-    <header className="border-b border-[#30363d] bg-[#161b22]">
+    <header className="sticky top-0 z-50 border-b border-[#30363d] bg-[#161b22]">
       <div className="flex items-center px-4 h-16 gap-4">
         <Button
           variant="ghost"
@@ -74,13 +73,6 @@ export function Header({
                 className="text-gray-300 hover:bg-[#30363d]"
               >
                 <Settings className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-gray-300 hover:bg-[#30363d]"
-              >
-                <Share2 className="h-5 w-5" />
               </Button>
               <Button
                 variant="ghost"
