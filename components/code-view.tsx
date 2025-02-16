@@ -2,8 +2,9 @@
 
 import { ChevronLeft, Folder, Github, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AgentsSection } from "./agents-section";
+import ChatSidebar from "./chat-sidebar";
 import { CodeViewer } from "./code-viewer";
 import { Header } from "./header";
 import { InsightsSection } from "./insights-section";
@@ -11,6 +12,12 @@ import { LoginButton } from "./login-button";
 import { RepositoryList } from "./repository-list";
 import { SecuritySection } from "./security-section";
 import { Input } from "./ui/input";
+
+interface RepoItem {
+  name: string;
+  type: string;
+  path: string;
+}
 
 export default function Component() {
   const { data: session, status } = useSession();
@@ -20,20 +27,57 @@ export default function Component() {
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [activeSection, setActiveSection] = useState("code");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(true);
+  const [repoStructure, setRepoStructure] = useState<RepoItem[]>([]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  const handleRepoSelect = (fullName: string) => {
+  const handleRepoSelect = async (fullName: string) => {
     setSelectedRepo(fullName);
     setCurrentPath("");
     setNavHistory([]);
     setFileContent([]);
+    await fetchRepoStructure(fullName);
   };
 
-  const handlePathChange = (newPath: string) => {
+  const fetchRepoStructure = async (repo?: string, path: string = "") => {
+    const targetRepo = repo || selectedRepo;
+    if (!targetRepo) return;
+
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${targetRepo}/contents/${path}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session?.accessToken}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+
+      const data = await response.json();
+      const structure = data.map((item: any) => ({
+        name: item.name,
+        type: item.type,
+        path: item.path,
+      }));
+      setRepoStructure(structure);
+    } catch (error) {
+      console.error("Error fetching repo structure:", error);
+    }
+  };
+
+  const handlePathChange = async (newPath: string) => {
     setNavHistory((prev) => [...prev, currentPath]);
     setCurrentPath(newPath);
+    await fetchRepoStructure(undefined, newPath);
   };
+
+  useEffect(() => {
+    if (selectedRepo) {
+      fetchRepoStructure(selectedRepo, currentPath);
+    }
+  }, [selectedRepo, currentPath]);
 
   if (status === "loading") {
     return <div>Loading...</div>;
@@ -87,7 +131,7 @@ export default function Component() {
         <main
           className={`flex-1 p-4 transition-all duration-300 ${
             isSidebarOpen ? "ml-64 pl-6" : "ml-10"
-          } pr-6 mt-8`}
+          } ${isChatSidebarOpen ? "mr-64 pr-6" : "mr-10"} mt-8`}
         >
           {!session?.user ? (
             <div className="flex flex-col items-center justify-center h-full">
@@ -148,6 +192,21 @@ export default function Component() {
             </div>
           )}
         </main>
+
+        {session?.user && (
+          <ChatSidebar
+            apiUrl="http://192.168.1.44:1234/v1/chat/completions"
+            isOpen={isChatSidebarOpen}
+            onToggle={() => setIsChatSidebarOpen(!isChatSidebarOpen)}
+            repoData={{
+              selectedRepo,
+              currentPath,
+              fileContent,
+              repoStructure,
+            }}
+            githubToken={session.accessToken!}
+          />
+        )}
       </div>
     </div>
   );
