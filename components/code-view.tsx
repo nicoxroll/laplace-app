@@ -1,12 +1,15 @@
 "use client";
 
-import { Folder, Github, Search } from "lucide-react";
+import { ChevronLeft, Folder, Github, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
+import { AgentsSection } from "./agents-section";
 import { CodeViewer } from "./code-viewer";
 import { Header } from "./header";
+import { InsightsSection } from "./insights-section";
 import { LoginButton } from "./login-button";
 import { RepositoryList } from "./repository-list";
+import { SecuritySection } from "./security-section";
 import { Input } from "./ui/input";
 
 export default function Component() {
@@ -16,6 +19,9 @@ export default function Component() {
   const [fileContent, setFileContent] = useState<string[]>([]);
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [activeSection, setActiveSection] = useState("code");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const handleRepoSelect = (fullName: string) => {
     setSelectedRepo(fullName);
@@ -43,27 +49,46 @@ export default function Component() {
 
       <div className="flex">
         {session?.user && (
-          <aside className="w-64 border-r border-[#30363d] h-[calc(100vh-8rem)] hidden lg:block">
-            <div className="p-4">
-              <div className="relative">
+          <aside
+            className={`fixed left-0 top-[6.5rem] h-[calc(100vh-6.5rem)] w-64 transform ${
+              isSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%-3rem)]"
+            } transition-transform duration-300 z-40 bg-[#0d1117] border-r border-[#30363d]`}
+          >
+            <div className="p-4 h-full flex flex-col">
+              <button
+                onClick={toggleSidebar}
+                className={`absolute -right-5 top-1/2 -translate-y-1/2 bg-[#161b22] p-2 rounded-full border border-[#30363d] hover:bg-[#30363d] z-50 ${
+                  isSidebarOpen ? "" : "rotate-180"
+                }`}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <div className="relative mb-4">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   className="pl-9 bg-[#0d1117] border-[#30363d] h-8 text-sm"
                   placeholder="Find a repository"
                 />
               </div>
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] pb-4">
+                <RepositoryList
+                  onRepoSelect={handleRepoSelect}
+                  onFileSelect={setFileContent}
+                  currentPath={currentPath}
+                  onPathChange={handlePathChange}
+                  selectedRepo={selectedRepo}
+                />
+              </div>
             </div>
-            <RepositoryList
-              onRepoSelect={handleRepoSelect}
-              onFileSelect={setFileContent}
-              currentPath={currentPath}
-              onPathChange={handlePathChange}
-              selectedRepo={selectedRepo}
-            />
           </aside>
         )}
 
-        <main className="flex-1 p-4">
+        <main
+          className={`flex-1 p-4 transition-all duration-300 ${
+            isSidebarOpen ? "ml-64 pl-6" : "ml-10"
+          } pr-6 mt-8`}
+        >
           {!session?.user ? (
             <div className="flex flex-col items-center justify-center h-full">
               <h1 className="text-2xl font-bold mb-4">
@@ -73,7 +98,7 @@ export default function Component() {
               <LoginButton />
             </div>
           ) : (
-            <div className="h-full">
+            <div className="h-full space-y-6 max-w-6xl mx-auto">
               {activeSection === "code" && (
                 <>
                   {fileContent.length > 0 ? (
@@ -110,59 +135,15 @@ export default function Component() {
               )}
 
               {activeSection === "security" && (
-                <div className="max-w-4xl p-4 bg-[#161b22] rounded-lg">
-                  <h2 className="text-xl font-bold mb-4">Security Overview</h2>
-                  {selectedRepo ? (
-                    <div className="space-y-4">
-                      <p>Security analysis for: {selectedRepo}</p>
-                      <div className="p-4 bg-[#0d1117] rounded">
-                        <p>Vulnerability scanning results</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-400">
-                      Select a repository to view security details
-                    </p>
-                  )}
-                </div>
+                <SecuritySection selectedRepo={selectedRepo} />
               )}
 
               {activeSection === "insights" && (
-                <div className="max-w-4xl p-4 bg-[#161b22] rounded-lg">
-                  <h2 className="text-xl font-bold mb-4">
-                    Repository Insights
-                  </h2>
-                  {selectedRepo ? (
-                    <div className="space-y-4">
-                      <p>Analytics for: {selectedRepo}</p>
-                      <div className="p-4 bg-[#0d1117] rounded">
-                        <p>Commit activity graph</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-400">
-                      Select a repository to view insights
-                    </p>
-                  )}
-                </div>
+                <InsightsSection selectedRepo={selectedRepo} />
               )}
 
               {activeSection === "agents" && (
-                <div className="max-w-4xl p-4 bg-[#161b22] rounded-lg">
-                  <h2 className="text-xl font-bold mb-4">AI Agents</h2>
-                  {selectedRepo ? (
-                    <div className="space-y-4">
-                      <p>AI tools for: {selectedRepo}</p>
-                      <div className="p-4 bg-[#0d1117] rounded">
-                        <p>Code generation assistant</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-400">
-                      Select a repository to use AI agents
-                    </p>
-                  )}
-                </div>
+                <AgentsSection selectedRepo={selectedRepo} />
               )}
             </div>
           )}
