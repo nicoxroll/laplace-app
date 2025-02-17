@@ -3,7 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronUp, File, Folder, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+// Cache para almacenar respuestas de la API
+const apiCache = new Map<string, any>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 interface Repository {
   id: number;
@@ -59,94 +63,122 @@ export function RepositoryList({
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState(defaultBranch);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  );
 
+  // Función de fetch con cache y reintentos
+  const fetchWithCache = useCallback(
+    async (url: string, options: RequestInit, retries = 3): Promise<any> => {
+      const cacheKey = `${url}|${selectedBranch}`;
+      const cached = apiCache.get(cacheKey);
+
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.data;
+      }
+
+      try {
+        const response = await fetch(url, options);
+
+        if (response.status === 403) {
+          const resetTime = response.headers.get("X-RateLimit-Reset");
+          if (resetTime) {
+            const waitTime = parseInt(resetTime) * 1000 - Date.now();
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+            return fetchWithCache(url, options, retries);
+          }
+        }
+
+        if (!response.ok)
+          throw new Error(`HTTP error! status: ${response.status}`);
+
+        const data = await response.json();
+        apiCache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
+      } catch (error) {
+        if (retries > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return fetchWithCache(url, options, retries - 1);
+        }
+        throw error;
+      }
+    },
+    [selectedBranch]
+  );
+
+  // Obtener repositorios con cache
   useEffect(() => {
     if (session?.accessToken && !selectedRepo) {
-      fetch("https://api.github.com/user/repos?sort=updated&per_page=50", {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch repositories");
-          return res.json();
-        })
-        .then((data: Repository[]) => {
+      const fetchRepos = async () => {
+        try {
+          const data = await fetchWithCache(
+            "https://api.github.com/user/repos?sort=updated&per_page=50",
+            {
+              headers: {
+                Authorization: `Bearer ${session.accessToken}`,
+              },
+            }
+          );
           setRepositories(data);
           setLoading(false);
-        })
-        .catch((err) => {
-          setError(err.message);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Error desconocido");
           setLoading(false);
-        });
+        }
+      };
+      fetchRepos();
     }
-  }, [session, selectedRepo]);
+  }, [session, selectedRepo, fetchWithCache]);
 
+  // Obtener branches con cache
   useEffect(() => {
     if (selectedRepo) {
-      fetch(`https://api.github.com/repos/${selectedRepo}/branches`, {
-        headers: {
-          Authorization: `Bearer ${session?.accessToken}`,
-        },
-      })
-        .then((res) => res.json())
-        .then((data: Branch[]) => setBranches(data))
-        .catch(console.error);
-    }
-  }, [selectedRepo, session?.accessToken]);
-
-  const fetchRepoContents = async (fullName: string, path: string = "") => {
-    try {
-      const response = await fetch(
-        `https://api.github.com/repos/${fullName}/contents/${path}?ref=${selectedBranch}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.accessToken}`,
-          },
+      const fetchBranches = async () => {
+        try {
+          const data = await fetchWithCache(
+            `https://api.github.com/repos/${selectedRepo}/branches`,
+            {
+              headers: {
+                Authorization: `Bearer ${session?.accessToken}`,
+              },
+            }
+          );
+          setBranches(data);
+        } catch (err) {
+          console.error("Error fetching branches:", err);
         }
-      );
-
-      if (!response.ok) throw new Error("Failed to load contents");
-      const data = await response.json();
-      setContents(data);
-      onPathChange?.(path);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load contents");
+      };
+      fetchBranches();
     }
-  };
+  }, [selectedRepo, session?.accessToken, fetchWithCache]);
 
-  const handleFileClick = async (item: GitHubContent) => {
-    if (item.type === "dir") {
-      const newPath = item.path;
-      setHistory([...history, currentPath]);
-      onPathChange?.(newPath);
-      fetchRepoContents(selectedRepo!, newPath);
-    } else if (onFileSelect) {
+  // Obtener contenido con cache y recursive fetching
+  const fetchRepoContents = useCallback(
+    async (fullName: string, path: string = "") => {
       try {
-        const isImage = [".jpg", ".jpeg", ".png", ".gif"].some((ext) =>
-          item.name.toLowerCase().endsWith(ext)
-        );
-
-        if (isImage) {
-          const imageUrl = `https://raw.githubusercontent.com/${selectedRepo}/${selectedBranch}/${encodeURIComponent(
-            item.path
-          )}`;
-          onFileSelect([], imageUrl, item.name);
-        } else {
-          const response = await fetch(item.url, {
+        const data = await fetchWithCache(
+          `https://api.github.com/repos/${fullName}/contents/${path}?ref=${selectedBranch}&recursive=1`,
+          {
             headers: {
               Authorization: `Bearer ${session?.accessToken}`,
             },
-          });
-          const fileData = await response.json();
-          const content = atob(fileData.content).split("\n");
-          onFileSelect(content, "", item.name);
-        }
+          }
+        );
+
+        const filteredData = data.filter(
+          (item: GitHubContent) => item.type === "dir" || item.type === "file"
+        );
+
+        setContents(filteredData);
+        onPathChange?.(path);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load file");
+        setError(
+          err instanceof Error ? err.message : "Error al cargar contenido"
+        );
       }
-    }
-  };
+    },
+    [selectedBranch, session?.accessToken, onPathChange, fetchWithCache]
+  );
 
   const handleGoBack = () => {
     const newHistory = [...history];
@@ -156,6 +188,53 @@ export function RepositoryList({
     fetchRepoContents(selectedRepo!, prevPath);
   };
 
+  // Manejo de clic en archivo/directorio
+  const handleFileClick = useCallback(
+    async (item: GitHubContent) => {
+      if (item.type === "dir") {
+        const newPath = item.path;
+        setHistory((prev) => [...prev, currentPath]);
+        onPathChange?.(newPath);
+        fetchRepoContents(selectedRepo!, newPath);
+      } else if (onFileSelect) {
+        try {
+          const isImage = [".jpg", ".jpeg", ".png", ".gif"].some((ext) =>
+            item.name.toLowerCase().endsWith(ext)
+          );
+
+          if (isImage) {
+            const imageUrl = `https://raw.githubusercontent.com/${selectedRepo}/${selectedBranch}/${encodeURIComponent(
+              item.path
+            )}`;
+            onFileSelect([], imageUrl, item.name);
+          } else {
+            const fileData = await fetchWithCache(item.url, {
+              headers: {
+                Authorization: `Bearer ${session?.accessToken}`,
+              },
+            });
+            const content = atob(fileData.content).split("\n");
+            onFileSelect(content, "", item.name);
+          }
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Error al cargar archivo"
+          );
+        }
+      }
+    },
+    [
+      selectedRepo,
+      selectedBranch,
+      onFileSelect,
+      session,
+      fetchWithCache,
+      currentPath,
+      onPathChange,
+    ]
+  );
+
+  // Filtros optimizados
   const filteredRepositories = repositories.filter(
     (repo) =>
       repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -1,7 +1,20 @@
 "use client";
 
 import { ChevronRight, Send } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import Prism from "prismjs";
+import "prismjs/components/prism-css.min.js";
+import "prismjs/components/prism-java.min.js";
+import "prismjs/components/prism-javascript.min.js";
+import "prismjs/components/prism-python.min.js";
+import "prismjs/components/prism-typescript.min.js";
+import "prismjs/themes/prism-okaidia.css";
+import {
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 interface RepoItem {
   name: string;
@@ -38,15 +51,14 @@ export default function ChatSidebar({
   >([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [width, setWidth] = useState(256);
+  const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // En el componente ChatSidebar, modifica la función getRepoContext
-  const getRepoContext = () => {
-    console.log("Debug - repoData:", JSON.stringify(repoData, null, 2)); // <-- Agregar logging
+  const getFileNameFromPath = (path: string) => path.split("/").pop() || path;
 
+  const getRepoContext = () => {
     if (!repoData.selectedRepo) return "No hay repositorio seleccionado";
 
     const formatStructure = (structure: RepoItem[]): string => {
@@ -60,69 +72,33 @@ export default function ChatSidebar({
         .join("\n");
     };
 
-    // Agregar más detalles de debug
-    const debugInfo = `
-=== Debug Information ===
-Repositorio actual: ${repoData.selectedRepo || "Ninguno"}
-Ruta actual: ${repoData.currentPath || "root"}
-Archivo actual: ${repoData.fileContent.length} líneas
-Estructura del repositorio: ${repoData.repoStructure.length} elementos
-=========================
-`;
-
-    return (
-      debugInfo +
-      `
-Contexto del repositorio:
-${formatStructure(repoData.repoStructure)}
-
-Contenido del archivo actual:
+    return `
 ${repoData.fileContent.join("\n").slice(0, 2000)}${
-        repoData.fileContent.join("\n").length > 2000 ? "..." : ""
-      }
-`
-    );
+      repoData.fileContent.join("\n").length > 2000 ? "..." : ""
+    }
+
+Estructura del repositorio:
+${formatStructure(repoData.repoStructure)}
+`;
   };
 
-  // Modificar el renderizado de mensajes para mostrar más información
-  {
-    messages.map((msg, i) => {
-      if (msg.role === "system") return null;
-      return (
-        <div
-          key={i}
-          className={`p-2 mb-2 rounded-lg ${
-            msg.role === "user" ? "bg-[#161b22] ml-6" : "bg-[#21262d] mr-6"
-          }`}
-        >
-          {msg.role === "assistant" && (
-            <div className="text-xs text-gray-400 mb-1">
-              Contexto usado: {repoData.selectedRepo || "Ninguno"} -{" "}
-              {repoData.currentPath || "root"} | Estructura:{" "}
-              {repoData.repoStructure.length} elementos | Archivo:{" "}
-              {repoData.fileContent.length} líneas
-            </div>
-          )}
-          <div
-            className="text-sm prose prose-invert"
-            dangerouslySetInnerHTML={{
-              __html: msg.content.replace(/\n/g, "<br />"),
-            }}
-          />
-        </div>
-      );
-    });
-  }
-  const startResizing = (e: React.MouseEvent) => {
+  useEffect(() => {
+    const highlight = () => {
+      Prism.highlightAll();
+    };
+    highlight();
+  }, [messages, repoData.fileContent, repoData.currentPath]);
+
+  const startResizing = (e: ReactMouseEvent) => {
     setIsResizing(true);
-    document.body.style.cursor = "ew-resize"; // Cambia cursor en todo el body
-    document.body.style.userSelect = "none"; // Previene selección de texto
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
   };
 
   const resize = (e: MouseEvent) => {
     if (isResizing) {
       const newWidth = window.innerWidth - e.clientX;
-      setWidth(Math.min(Math.max(newWidth, 200), 800)); // Rango más amplio
+      setWidth(Math.min(Math.max(newWidth, 200), 800));
     }
   };
 
@@ -143,15 +119,6 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
     };
   }, [isResizing]);
 
-  useEffect(() => {
-    document.addEventListener("mousemove", resize);
-    document.addEventListener("mouseup", stopResizing);
-    return () => {
-      document.removeEventListener("mousemove", resize);
-      document.removeEventListener("mouseup", stopResizing);
-    };
-  }, [isResizing]);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -159,18 +126,9 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
     try {
       setLoading(true);
       const newMessage = { role: "user", content: input };
-
       const contextMessage = {
         role: "system",
-        content: `Contexto del repositorio GitHub:
-      ${getRepoContext()}
-      
-      Instrucciones:
-      1. Responde en el mismo idioma del usuario
-      2. Usa markdown para código
-      3. Sé conciso
-      4. Referencia rutas de archivos cuando sea relevante
-      5. Considera la estructura del repositorio para sugerencias`,
+        content: `Contexto:\n${getRepoContext()}\nInstrucciones: Responde en markdown usando el contexto del repositorio`,
       };
 
       setMessages((prev) => [...prev, newMessage]);
@@ -192,27 +150,21 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
       const data = await response.json();
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: data.choices[0].message.content,
-        },
+        { role: "assistant", content: data.choices[0].message.content },
       ]);
     } catch (error) {
       console.error("Error:", error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "Error al obtener respuesta",
-        },
+        { role: "assistant", content: "⚠️ Error al obtener respuesta" },
       ]);
     } finally {
       setLoading(false);
       setTimeout(() => {
-        chatContainerRef.current?.scrollTo(
-          0,
-          chatContainerRef.current.scrollHeight
-        );
+        chatContainerRef.current?.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        });
       }, 100);
     }
   };
@@ -225,10 +177,9 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
       } transition-transform duration-300 z-40 bg-[#0d1117] border-l border-[#30363d]`}
       style={{
         width: `${width}px`,
-        transition: isResizing ? "none" : "width 0.2s ease", // Transición suave
+        transition: isResizing ? "none" : "width 0.2s ease",
       }}
     >
-      {/* Control de redimensionado (barra vertical izquierda) */}
       <div
         className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-gray-500 z-50"
         onMouseDown={startResizing}
@@ -236,17 +187,31 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
       />
 
       <div className="p-3 h-full flex flex-col relative">
-        {/* Botón de toggle */}
         <button
           onClick={onToggle}
           className={`absolute -left-3 top-1/2 -translate-y-1/2 bg-[#161b22] p-1.5 rounded-full border border-[#30363d] hover:bg-[#30363d] z-50 ${
             isOpen ? "" : "rotate-180"
           }`}
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4 text-[#c9d1d9]" />
         </button>
 
-        {/* Área del chat */}
+        <div className="space-y-4 mb-4">
+          <div className="repo-header">
+            {repoData.selectedRepo && (
+              <div className="repo-info">
+                <div className="text-xs text-gray-400 mb-1">
+                  Repositorio activo:
+                </div>
+                <div className="text-sm font-mono text-gray-300 truncate">
+                  {repoData.selectedRepo}
+                  {repoData.currentPath && `:${repoData.currentPath}`}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] pb-3"
@@ -256,46 +221,56 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
             return (
               <div
                 key={i}
-                className={`p-2 mb-2 rounded-lg ${
+                className={`p-3 mb-3 rounded-lg ${
                   msg.role === "user"
-                    ? "bg-[#161b22] ml-6"
-                    : "bg-[#21262d] mr-6"
+                    ? "bg-[#1f6feb] ml-6"
+                    : "bg-[#161b22] mr-6"
                 }`}
               >
-                {msg.role === "assistant" && repoData.selectedRepo && (
-                  <div className="text-xs text-gray-400 mb-1">
-                    Contexto usado: {repoData.selectedRepo} -{" "}
-                    {repoData.currentPath || "master"}
+                {msg.role === "assistant" && (
+                  <div className="text-xs text-gray-400 mb-2">
+                    Contexto: {repoData.selectedRepo}
                   </div>
                 )}
                 <div
-                  className="text-sm prose prose-invert"
+                  className="prose prose-invert text-sm"
                   dangerouslySetInnerHTML={{
-                    __html: msg.content.replace(/\n/g, "<br />"),
+                    __html: msg.content
+                      .replace(
+                        /```(\w+)?\n([\s\S]*?)```/g,
+                        (_, lang = "text", code) => {
+                          return `<pre class="language-${lang}"><code>${Prism.highlight(
+                            code,
+                            Prism.languages[lang] || Prism.languages.text,
+                            lang
+                          )}</code></pre>`;
+                        }
+                      )
+                      .replace(/\n/g, "<br />"),
                   }}
                 />
               </div>
             );
           })}
           {loading && (
-            <div className="p-2 mb-2 rounded-lg bg-[#21262d] mr-6">
-              <p className="text-sm text-gray-400">Escribiendo...</p>
+            <div className="flex items-center space-x-2 text-[#8b949e] pl-4">
+              <div className="dot-flashing"></div>
+              <span className="text-sm">Generando respuesta...</span>
             </div>
           )}
         </div>
 
-        {/* Formulario de entrada */}
         <form onSubmit={handleSubmit} className="relative mt-3">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="w-full pl-3 pr-8 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm"
+            className="w-full pl-3 pr-8 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-[#c9d1d9] focus:ring-2 focus:ring-[#1f6feb] focus:outline-none"
             placeholder="Escribe tu pregunta..."
             disabled={loading}
           />
           <button
             type="submit"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#58a6ff]"
             disabled={loading}
           >
             <Send className="h-4 w-4" />

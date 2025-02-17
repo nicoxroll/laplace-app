@@ -91,4 +91,75 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+
+  @keyframes dot-flashing {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+  }
+
+  .dot-flashing {
+    position: relative;
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #8b949e;
+    animation: dot-flashing 1s infinite linear;
+  }
+
+  .dot-flashing::before,
+  .dot-flashing::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #8b949e;
+    animation: dot-flashing 1s infinite linear;
+  }
+
+  .dot-flashing::before {
+    left: -10px;
+    animation-delay: 0.2s;
+  }
+
+  .dot-flashing::after {
+    left: 10px;
+    animation-delay: 0.4s;
+  }
+
+  @keyframes typing {
+    from { max-width: 0; }
+    to { max-width: 100%; }
+  }
+
+  .typing-effect {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    animation: typing 1s steps(40, end) forwards;
+  }
+
+  /* Estilos para el árbol de directorios */
+.tree-item {
+  transition: background-color 0.2s ease;
+}
+
+.tree-item:hover {
+  background-color: #1a1f27;
+}
+
+.recharts-tooltip {
+  background-color: #0d1117 !important;
+  border: 1px solid #30363d !important;
+  border-radius: 6px !important;
+  padding: 8px !important;
+}
+
+.recharts-tooltip-label {
+  color: #c9d1d9 !important;
+}
+
+.recharts-legend-item-text {
+  color: #8b949e !important;
+}
 }
