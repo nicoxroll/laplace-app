@@ -3,6 +3,8 @@
 import { File, FileText, Folder, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import "reactflow/dist/style.css";
 import { Cell, Legend, Pie, PieChart, Tooltip } from "recharts";
 
 interface TreeNode {
@@ -27,6 +29,10 @@ const COLORS = [
   "#a5d6ff",
 ];
 
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 60;
+const LEVEL_SPACING = 300;
+
 export function InsightsSection({
   selectedRepo,
 }: {
@@ -36,6 +42,64 @@ export function InsightsSection({
   const [repoStructure, setRepoStructure] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Generar datos para el gráfico de nodos
+  const { nodes, edges } = useMemo(() => {
+    const nodes: any[] = [];
+    const edges: any[] = [];
+    let xPos = 0;
+    let yPos = 0;
+
+    const processNode = (node: TreeNode, parentId?: string, depth = 0) => {
+      const id = node.path;
+      const isDir = node.type === "dir";
+
+      // Posicionamiento
+      xPos = depth * LEVEL_SPACING;
+      yPos += NODE_HEIGHT + 20;
+
+      nodes.push({
+        id,
+        data: {
+          label: (
+            <div className="flex items-center gap-2 p-2">
+              {isDir ? (
+                <Folder className="h-4 w-4 text-[#58a6ff]" />
+              ) : (
+                <File className="h-4 w-4 text-[#7ee787]" />
+              )}
+              <span className="text-sm text-white">{node.name}</span>
+            </div>
+          ),
+        },
+        position: { x: xPos, y: yPos },
+        style: {
+          background: isDir ? "#1f2937" : "#374151",
+          border: "1px solid #30363d",
+          borderRadius: "6px",
+          width: `${NODE_WIDTH}px`,
+        },
+      });
+
+      if (parentId) {
+        edges.push({
+          id: `${parentId}-${id}`,
+          source: parentId,
+          target: id,
+          animated: isDir,
+          style: {
+            stroke: "#3f3f46",
+            strokeWidth: 2,
+          },
+        });
+      }
+
+      node.children?.forEach((child) => processNode(child, id, depth + 1));
+    };
+
+    repoStructure.forEach((node) => processNode(node));
+    return { nodes, edges };
+  }, [repoStructure]);
 
   const fileTypeDistribution = useMemo(() => {
     const countMap: Record<string, number> = {};
@@ -95,31 +159,6 @@ export function InsightsSection({
     );
   };
 
-  const TreeItem = ({
-    node,
-    depth = 0,
-  }: {
-    node: TreeNode;
-    depth?: number;
-  }) => (
-    <div className="ml-4">
-      <div
-        className="flex items-center gap-2 py-1 hover:bg-[#0d1117] px-2 rounded transition-colors"
-        style={{ marginLeft: `${depth * 20}px` }}
-      >
-        {node.type === "dir" ? (
-          <Folder className="h-4 w-4 text-[#58a6ff]" />
-        ) : (
-          <File className="h-4 w-4 text-[#7ee787]" />
-        )}
-        <span className="text-sm text-gray-300">{node.name}</span>
-      </div>
-      {node.children?.map((child) => (
-        <TreeItem key={child.path} node={child} depth={depth + 1} />
-      ))}
-    </div>
-  );
-
   useEffect(() => {
     const fetchRepoStructure = async () => {
       if (!selectedRepo || !session?.accessToken) return;
@@ -161,7 +200,7 @@ export function InsightsSection({
       {selectedRepo ? (
         <div className="space-y-6">
           {loading && (
-            <div className="flex justify-center items-center gap-2 text-gray-400">
+            <div className="flex justify-center items-center gap-2 text-white">
               <Loader2 className="h-4 w-4 animate-spin" />
               Analizando repositorio...
             </div>
@@ -221,15 +260,28 @@ export function InsightsSection({
           )}
 
           {!loading && !error && (
-            <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
+            <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d] h-[600px]">
               <h3 className="text-lg font-semibold mb-4">
-                Estructura de directorios
+                Estructura del Repositorio
               </h3>
-              <div className="max-h-[500px] overflow-y-auto">
-                {repoStructure.map((node) => (
-                  <TreeItem key={node.path} node={node} />
-                ))}
-              </div>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                fitView
+                nodesDraggable={true}
+                nodesConnectable={false}
+                panOnDrag={true}
+                zoomOnScroll={true}
+              >
+                <Background color="#30363d" gap={20} />
+                <Controls />
+                <MiniMap
+                  nodeColor={(n) =>
+                    n.data.props?.isDir ? "#58a6ff" : "#7ee787"
+                  }
+                  maskColor="#30363d"
+                />
+              </ReactFlow>
             </div>
           )}
 

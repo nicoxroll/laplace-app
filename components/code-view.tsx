@@ -10,7 +10,7 @@ import { Header } from "./header";
 import { InsightsSection } from "./insights-section";
 import { LoginButton } from "./login-button";
 import { RepositoryList } from "./repository-list";
-import { SecuritySection } from "./security-section";
+import FlowSidebar from "./security-section";
 
 interface RepoItem {
   name: string;
@@ -245,7 +245,14 @@ export default function Component() {
               )}
 
               {activeSection === "security" && (
-                <SecuritySection selectedRepo={selectedRepo} />
+                <FlowSidebar
+                  apiUrl="http://192.168.1.44:1235/v1/chat/completions"
+                  repoData={{
+                    selectedRepo,
+
+                    repoStructure,
+                  }}
+                />
               )}
 
               {activeSection === "insights" && (
