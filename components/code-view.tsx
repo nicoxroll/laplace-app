@@ -189,9 +189,7 @@ export default function Component() {
         >
           {!session?.user ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <h1 className="text-2xl font-bold mb-4">
-                Welcome to GitHub Clone
-              </h1>
+              <h1 className="text-2xl font-bold mb-4">Welcome to LaPlace</h1>
               <p className="mb-4">Please sign in to view your repositories.</p>
               <LoginButton />
             </div>
@@ -278,6 +276,7 @@ export default function Component() {
               repoStructure,
             }}
             githubToken={session.accessToken!}
+            fileName={fileName}
           />
         )}
       </div>

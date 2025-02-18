@@ -1,4 +1,5 @@
 "use client";
+import "/styles/globals.css";
 
 import { ChevronRight, Send } from "lucide-react";
 import Prism from "prismjs";
@@ -37,6 +38,7 @@ interface ChatSidebarProps {
   onToggle: () => void;
   repoData: RepoData;
   githubToken: string;
+  fileName?: string;
 }
 
 export default function ChatSidebar({
@@ -45,6 +47,7 @@ export default function ChatSidebar({
   onToggle,
   repoData,
   githubToken,
+  fileName,
 }: ChatSidebarProps) {
   const [messages, setMessages] = useState<
     Array<{ role: string; content: string }>
@@ -55,8 +58,6 @@ export default function ChatSidebar({
   const [isResizing, setIsResizing] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
-
-  const getFileNameFromPath = (path: string) => path.split("/").pop() || path;
 
   const getRepoContext = () => {
     if (!repoData.selectedRepo) return "No hay repositorio seleccionado";
@@ -73,6 +74,15 @@ export default function ChatSidebar({
     };
 
     return `
+${repoData.fileContent.join("\n").slice(0, 2000)}${
+      repoData.fileContent.join("\n").length > 2000 ? "..." : ""
+    }
+
+ Archivo actual: ${fileName || "Ninguno"}
+Ruta completa: ${repoData.currentPath ? `${repoData.currentPath}/` : ""}${
+      fileName || ""
+    }
+Contenido del archivo:
 ${repoData.fileContent.join("\n").slice(0, 2000)}${
       repoData.fileContent.join("\n").length > 2000 ? "..." : ""
     }
@@ -206,6 +216,8 @@ ${formatStructure(repoData.repoStructure)}
                 <div className="text-sm font-mono text-gray-300 truncate">
                   {repoData.selectedRepo}
                   {repoData.currentPath && `:${repoData.currentPath}`}
+                  {"/"}
+                  {fileName}
                 </div>
               </div>
             )}
@@ -253,9 +265,13 @@ ${formatStructure(repoData.repoStructure)}
             );
           })}
           {loading && (
-            <div className="flex items-center space-x-2 text-[#8b949e] pl-4">
-              <div className="dot-flashing"></div>
-              <span className="text-sm">Generando respuesta...</span>
+            <div className="flex items-center justify-end space-x-2 text-[#8b949e] pr-4">
+              <span className="text-sm">Generando respuesta </span>
+              <div className="dot-flashing">
+                <div className="dot"></div>
+                <div className="dot"></div>
+                <div className="dot"></div>
+              </div>
             </div>
           )}
         </div>

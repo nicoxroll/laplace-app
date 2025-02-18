@@ -112,7 +112,7 @@ export function RepositoryList({
       const fetchRepos = async () => {
         try {
           const data = await fetchWithCache(
-            "https://api.github.com/user/repos?sort=updated&per_page=50",
+            "https://api.github.com/user/repos?sort=updated&per_page=100",
             {
               headers: {
                 Authorization: `Bearer ${session.accessToken}`,
