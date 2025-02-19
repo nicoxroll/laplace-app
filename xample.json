@@ -1,0 +1,86 @@
+{
+    "$schema": "https://json-schema.org/draft-2020-12/schema",
+    "title": "React Flow Mini Schema",
+    "type": "object",
+    "properties": {
+      "nodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "default",
+                    "security"
+                  ]
+                }
+              },
+              "required": [
+                "label"
+              ]
+            },
+            "position": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "data",
+            "position"
+          ]
+        }
+      },
+      "edges": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "animated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "source",
+            "target"
+          ]
+        }
+      }
+    },
+    "required": [
+      "nodes",
+      "edges"
+    ]
+  }

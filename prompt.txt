@@ -1,0 +1,25 @@
+Quiero que me des el Dataflow de la aplicación. que no se solapen las posiciones
+
+{
+  "nodes": [
+    {
+      "id": "node1",
+      "data": {
+        "label": "Start",
+        "type": "input"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge1",
+      "source": "node1",
+      "target": "node2",
+      "animated": true
+    }
+  ]
+}
