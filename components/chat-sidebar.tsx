@@ -265,13 +265,8 @@ ${formatStructure(repoData.repoStructure)}
             );
           })}
           {loading && (
-            <div className="flex items-center justify-end space-x-2 text-[#8b949e] pr-4">
-              <span className="text-sm">Generando respuesta </span>
-              <div className="dot-flashing">
-                <div className="dot"></div>
-                <div className="dot"></div>
-                <div className="dot"></div>
-              </div>
+            <div className="flex items-center space-x-2 text-[#8b949e] pl-4">
+              <div className="dot-flashing"></div>
             </div>
           )}
         </div>

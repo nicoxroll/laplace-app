@@ -63,9 +63,6 @@ export function RepositoryList({
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState(defaultBranch);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
-    null
-  );
 
   // Función de fetch con cache y reintentos
   const fetchWithCache = useCallback(
@@ -108,7 +105,7 @@ export function RepositoryList({
 
   // Obtener repositorios con cache
   useEffect(() => {
-    if (session?.accessToken && !selectedRepo) {
+    if (session?.accessToken) {
       const fetchRepos = async () => {
         try {
           const data = await fetchWithCache(
@@ -128,7 +125,16 @@ export function RepositoryList({
       };
       fetchRepos();
     }
-  }, [session, selectedRepo, fetchWithCache]);
+  }, [session, fetchWithCache]);
+
+  // Inicializar el componente al cargar
+  useEffect(() => {
+    if (!selectedRepo) {
+      onRepoSelect?.("", "");
+      onPathChange?.("");
+      setHistory([]);
+    }
+  }, [selectedRepo, onRepoSelect, onPathChange]);
 
   // Obtener branches con cache
   useEffect(() => {
@@ -172,9 +178,13 @@ export function RepositoryList({
         setContents(filteredData);
         onPathChange?.(path);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Error al cargar contenido"
-        );
+        if (err instanceof Error && err.message.includes("404")) {
+          console.log("Recurso no encontrado. Por favor, verifica la ruta.");
+        } else {
+          setError(
+            err instanceof Error ? err.message : "Error al cargar contenido"
+          );
+        }
       }
     },
     [selectedBranch, session?.accessToken, onPathChange, fetchWithCache]

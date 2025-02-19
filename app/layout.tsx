@@ -5,6 +5,13 @@ import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
+export const metadata = {
+  generator: "v0.dev",
+  icons: {
+    icon: "/favicon.ico", // Ruta a tu archivo favicon
+  },
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -18,9 +25,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-import "./globals.css";
-
-export const metadata = {
-  generator: "v0.dev",
-};
