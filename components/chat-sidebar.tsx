@@ -393,7 +393,6 @@ ${formatStructure(repoData.repoStructure)}
         <form onSubmit={handleSubmit} className="relative mt-3">
           {loading ? (
             <div className="w-full pl-3 pr-8 py-2 bg-[#0d1117] rounded-lg text-sm text-[#8b949e] flex items-center my-2 mx-1">
-              <span>Generando respuesta</span>
               <div className="dot-flashing mr-2"></div>{" "}
             </div>
           ) : (
