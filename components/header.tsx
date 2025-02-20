@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Bot,
+  Cat,
   ChevronDown,
   Code2,
   FileText,
-  Github,
   Menu,
   Plus,
   Settings,
@@ -38,7 +38,7 @@ export function Header({
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <Github className="h-8 w-8 text-white" />
+        <Cat className="h-8 w-8 text-white" />
         {session?.user ? (
           <div className="flex items-center gap-2 text-sm">
             <Link href="#" className="hover:text-blue-300">
@@ -46,7 +46,7 @@ export function Header({
             </Link>
           </div>
         ) : (
-          <span className="text-sm">GitHub</span>
+          <span className="text-sm">Laplace</span>
         )}
 
         {session?.user && (
