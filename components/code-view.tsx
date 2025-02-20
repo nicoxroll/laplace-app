@@ -244,7 +244,10 @@ export default function Component() {
 
               {activeSection === "security" && (
                 <FlowSidebar
-                  apiUrl="http://192.168.1.44:1235/v1/chat/completions"
+                  apiUrl={
+                    process.env.API_FLOW_URL ||
+                    "http://localhost:1234/v1/chat/completions"
+                  }
                   repoData={{
                     selectedRepo,
 
@@ -266,7 +269,9 @@ export default function Component() {
 
         {session?.user && (
           <ChatSidebar
-            apiUrl="http://192.168.1.44:1234/v1/chat/completions"
+            apiUrl={
+              process.env.API_URL || "http://localhost:1234/v1/chat/completions"
+            }
             isOpen={isChatSidebarOpen}
             onToggle={() => setIsChatSidebarOpen(!isChatSidebarOpen)}
             repoData={{

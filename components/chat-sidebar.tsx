@@ -3,11 +3,11 @@ import "/styles/globals.css";
 
 import { ChevronRight, Send } from "lucide-react";
 import Prism from "prismjs";
-import "prismjs/components/prism-css.min.js";
-import "prismjs/components/prism-java.min.js";
-import "prismjs/components/prism-javascript.min.js";
-import "prismjs/components/prism-python.min.js";
-import "prismjs/components/prism-typescript.min.js";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-typescript";
 import "prismjs/themes/prism-okaidia.css";
 import {
   FormEvent,
@@ -16,6 +16,8 @@ import {
   useRef,
   useState,
 } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface RepoItem {
   name: string;
@@ -93,10 +95,7 @@ ${formatStructure(repoData.repoStructure)}
   };
 
   useEffect(() => {
-    const highlight = () => {
-      Prism.highlightAll();
-    };
-    highlight();
+    Prism.highlightAll();
   }, [messages, repoData.fileContent, repoData.currentPath]);
 
   const startResizing = (e: ReactMouseEvent) => {
@@ -179,6 +178,88 @@ ${formatStructure(repoData.repoStructure)}
     }
   };
 
+  const renderMarkdown = (content: string) => {
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, className, children, ...props }) {
+            const language = className?.replace("language-", "") || "text";
+            return (
+              <pre
+                className={`language-${language} rounded-lg p-4 my-3 bg-[#1e1e1e]`}
+              >
+                <code className={`language-${language}`}>{children}</code>
+              </pre>
+            );
+          },
+          h2({ children }) {
+            return (
+              <h2 className="text-xl font-semibold text-blue-300 my-4">
+                {children}
+              </h2>
+            );
+          },
+          ul({ children }) {
+            return (
+              <ul className="list-disc pl-6 space-y-2 my-3">{children}</ul>
+            );
+          },
+          blockquote({ children }) {
+            return (
+              <blockquote className="border-l-4 border-gray-600 pl-4 text-gray-400 my-4">
+                {children}
+              </blockquote>
+            );
+          },
+          a({ href, children }) {
+            return (
+              <a
+                href={href}
+                className="text-blue-400 hover:underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {children}
+              </a>
+            );
+          },
+          em({ children }) {
+            return <em className="text-gray-400 italic">{children}</em>;
+          },
+          strong({ children }) {
+            return (
+              <strong className="text-gray-300 font-semibold">
+                {children}
+              </strong>
+            );
+          },
+          table({ children }) {
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full my-4">{children}</table>
+              </div>
+            );
+          },
+          th({ children }) {
+            return (
+              <th className="border-b border-gray-600 px-4 py-2 text-left">
+                {children}
+              </th>
+            );
+          },
+          td({ children }) {
+            return (
+              <td className="border-b border-gray-600 px-4 py-2">{children}</td>
+            );
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
+
   return (
     <aside
       ref={sidebarRef}
@@ -244,28 +325,14 @@ ${formatStructure(repoData.repoStructure)}
                     Contexto: {repoData.selectedRepo}
                   </div>
                 )}
-                <div
-                  className="prose prose-invert text-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: msg.content
-                      .replace(
-                        /```(\w+)?\n([\s\S]*?)```/g,
-                        (_, lang = "text", code) => {
-                          return `<pre class="language-${lang}"><code>${Prism.highlight(
-                            code,
-                            Prism.languages[lang] || Prism.languages.text,
-                            lang
-                          )}</code></pre>`;
-                        }
-                      )
-                      .replace(/\n/g, "<br />"),
-                  }}
-                />
+                <div className="text-sm">{renderMarkdown(msg.content)}</div>
               </div>
             );
           })}
           {loading && (
-            <div className="flex items-center space-x-2 text-[#8b949e] pl-4">
+            <div className="flex items-center space-x-2 text-[#8b949e] pl-4 mt-5">
+              {" "}
+              {/* Añadido mt-4 */}
               <div className="dot-flashing"></div>
             </div>
           )}
