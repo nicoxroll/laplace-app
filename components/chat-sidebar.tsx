@@ -1,7 +1,7 @@
 "use client";
 import "/styles/globals.css";
 
-import { ChevronRight, Send } from "lucide-react";
+import { ChevronRight, Send, StopCircle } from "lucide-react";
 import Prism from "prismjs";
 import "prismjs/components/prism-css";
 import "prismjs/components/prism-java";
@@ -12,6 +12,7 @@ import "prismjs/themes/prism-okaidia.css";
 import {
   FormEvent,
   MouseEvent as ReactMouseEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -58,10 +59,12 @@ export default function ChatSidebar({
   const [loading, setLoading] = useState(false);
   const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const getRepoContext = () => {
+  const getRepoContext = useCallback(() => {
     if (!repoData.selectedRepo) return "No hay repositorio seleccionado";
 
     const formatStructure = (structure: RepoItem[]): string => {
@@ -92,11 +95,11 @@ ${repoData.fileContent.join("\n").slice(0, 2000)}${
 Estructura del repositorio:
 ${formatStructure(repoData.repoStructure)}
 `;
-  };
+  }, [repoData, fileName]);
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [messages, repoData.fileContent, repoData.currentPath]);
+  }, [messages]);
 
   const startResizing = (e: ReactMouseEvent) => {
     setIsResizing(true);
@@ -130,7 +133,10 @@ ${formatStructure(repoData.repoStructure)}
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
+
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
       setLoading(true);
@@ -140,7 +146,10 @@ ${formatStructure(repoData.repoStructure)}
         content: `Contexto:\n${getRepoContext()}\nInstrucciones: Responde en markdown usando el contexto del repositorio`,
       };
 
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages((prev) => {
+        const filteredMessages = prev.filter((msg) => msg.role !== "system");
+        return [...filteredMessages, contextMessage, newMessage];
+      });
       setInput("");
 
       const response = await fetch(apiUrl, {
@@ -151,24 +160,64 @@ ${formatStructure(repoData.repoStructure)}
         },
         body: JSON.stringify({
           model: "deepseek-r1-distill-qwen-7b",
-          messages: [contextMessage, ...messages, newMessage],
+          messages: [contextMessage, newMessage],
           temperature: 0.7,
+          stream: true,
         }),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.choices[0].message.content },
-      ]);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessage = "";
+
+      if (!reader)
+        throw new Error("No se pudo obtener el lector de la respuesta");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.choices[0].delta?.content) {
+                assistantMessage += data.choices[0].delta.content;
+                setMessages((prev) => {
+                  const lastMessage = prev[prev.length - 1];
+                  if (lastMessage?.role === "assistant") {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...lastMessage, content: assistantMessage },
+                    ];
+                  }
+                  return [
+                    ...prev,
+                    { role: "assistant", content: assistantMessage },
+                  ];
+                });
+              }
+            } catch (err) {
+              console.error("Error parsing chunk:", err);
+            }
+          }
+        }
+      }
     } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "⚠️ Error al obtener respuesta" },
-      ]);
+      if ((error as Error).name !== "AbortError") {
+        console.error("Error:", error);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "⚠️ Error al obtener respuesta" },
+        ]);
+      }
     } finally {
       setLoading(false);
+      setAbortController(null);
       setTimeout(() => {
         chatContainerRef.current?.scrollTo({
           top: chatContainerRef.current.scrollHeight,
@@ -178,8 +227,16 @@ ${formatStructure(repoData.repoStructure)}
     }
   };
 
-  const renderMarkdown = (content: string) => {
-    return (
+  const handleStop = () => {
+    if (abortController) {
+      abortController.abort();
+      setLoading(false);
+      setAbortController(null);
+    }
+  };
+
+  const renderMarkdown = useCallback(
+    (content: string) => (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -189,7 +246,9 @@ ${formatStructure(repoData.repoStructure)}
               <pre
                 className={`language-${language} rounded-lg p-4 my-3 bg-[#1e1e1e]`}
               >
-                <code className={`language-${language}`}>{children}</code>
+                <code className={`language-${language}`}>
+                  {String(children).replace(/\n$/, "")}
+                </code>
               </pre>
             );
           },
@@ -257,8 +316,9 @@ ${formatStructure(repoData.repoStructure)}
       >
         {content}
       </ReactMarkdown>
-    );
-  };
+    ),
+    []
+  );
 
   return (
     <aside
@@ -309,9 +369,9 @@ ${formatStructure(repoData.repoStructure)}
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] pb-3"
         >
-          {messages.map((msg, i) => {
-            if (msg.role === "system") return null;
-            return (
+          {messages
+            .filter((msg) => msg.role !== "system") // Ocultar mensajes de sistema
+            .map((msg, i) => (
               <div
                 key={i}
                 className={`p-3 mb-3 rounded-lg ${
@@ -327,31 +387,35 @@ ${formatStructure(repoData.repoStructure)}
                 )}
                 <div className="text-sm">{renderMarkdown(msg.content)}</div>
               </div>
-            );
-          })}
-          {loading && (
-            <div className="flex items-center space-x-2 text-[#8b949e] pl-4 mt-5">
-              {" "}
-              {/* Añadido mt-4 */}
-              <div className="dot-flashing"></div>
-            </div>
-          )}
+            ))}
         </div>
 
         <form onSubmit={handleSubmit} className="relative mt-3">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            className="w-full pl-3 pr-8 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-[#c9d1d9] focus:ring-2 focus:ring-[#1f6feb] focus:outline-none"
-            placeholder="Escribe tu pregunta..."
-            disabled={loading}
-          />
+          {loading ? (
+            <div className="w-full pl-3 pr-8 py-2 bg-[#0d1117] rounded-lg text-sm text-[#8b949e] flex items-center my-2 mx-1">
+              <span>Generando respuesta</span>
+              <div className="dot-flashing mr-2"></div>{" "}
+            </div>
+          ) : (
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              className="w-full pl-3 pr-8 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-[#c9d1d9] focus:ring-2 focus:ring-[#1f6feb] focus:outline-none"
+              placeholder="Escribe tu pregunta..."
+              disabled={loading}
+            />
+          )}
           <button
-            type="submit"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#58a6ff]"
-            disabled={loading}
+            type="button"
+            onClick={loading ? handleStop : handleSubmit}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#58a6ff] disabled:opacity-50"
+            disabled={!input.trim() && !loading}
           >
-            <Send className="h-4 w-4" />
+            {loading ? (
+              <StopCircle className="h-4 w-4" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </button>
         </form>
       </div>

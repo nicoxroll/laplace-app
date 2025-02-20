@@ -20,10 +20,6 @@ interface FlowSidebarProps {
   };
 }
 
-interface ApiResponse {
-  securityAnalysis: string;
-}
-
 const CODE_EXTENSIONS = new Set([
   "js",
   "ts",
@@ -38,7 +34,7 @@ const CODE_EXTENSIONS = new Set([
 
 const CONFIG_PATTERNS = [
   /(\/|^)(config|\.github|\.vscode|tests?|__mocks__|docker|scripts)(\/|$)/i,
-  /\.(json|yml|yaml|toml|env|ini|cfg|conf|bak|css|jpeg|jpg|png|gif|svg|webp)$/i,
+  /\.(yml|yaml|toml|env|ini|cfg|conf|bak|css|jpeg|jpg|png|gif|svg|webp)$/i,
   /(\/|^)(tailwind|postcss|vite|webpack|jest|babel)\.config\.[jt]sx?$/i,
   /(\/|^)(tsconfig|jsconfig|next\.config|svelte\.config)\.[jt]sx?$/i,
   /(\/|^)\..*rc(\.[jt]sx?)?$/i,
@@ -48,10 +44,12 @@ export default function SecurityAnalysis({
   apiUrl,
   repoData,
 }: FlowSidebarProps) {
-  const [securityAnalysis, setSecurityAnalysis] = useState<string | null>(null);
+  const [securityAnalysis, setSecurityAnalysis] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasFetched, setHasFetched] = useState(false);
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
 
   const filterCodeFiles = useCallback((files: RepoItem[]) => {
     return files.filter((file) => {
@@ -71,7 +69,7 @@ export default function SecurityAnalysis({
     try {
       setLoading(true);
       setError("");
-      setSecurityAnalysis(null);
+      setSecurityAnalysis("");
 
       const filteredCodeFiles = filterCodeFiles(repoData.repoStructure);
       if (filteredCodeFiles.length === 0) {
@@ -81,6 +79,7 @@ export default function SecurityAnalysis({
       }
 
       const controller = new AbortController();
+      setAbortController(controller);
       const timeoutId = setTimeout(() => controller.abort(), 100000);
 
       const response = await fetch(apiUrl, {
@@ -106,6 +105,7 @@ export default function SecurityAnalysis({
           ],
           model: "deepseek-r1-distill-qwen-7b",
           temperature: 0.3,
+          stream: true,
         }),
         signal: controller.signal,
       });
@@ -115,10 +115,36 @@ export default function SecurityAnalysis({
       if (!response.ok)
         throw new Error(`Error ${response.status}: ${response.statusText}`);
 
-      const data = await response.json();
-      const analysisResult = data.choices[0].message.content;
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
 
-      setSecurityAnalysis(analysisResult);
+      if (!reader)
+        throw new Error("No se pudo obtener el lector de la respuesta");
+
+      let analysisResult = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.choices[0].delta?.content) {
+                analysisResult += data.choices[0].delta.content;
+                setSecurityAnalysis(
+                  (prev) => prev + data.choices[0].delta.content
+                );
+              }
+            } catch (err) {
+              console.error("Error parsing chunk:", err);
+            }
+          }
+        }
+      }
       setHasFetched(true);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -126,8 +152,16 @@ export default function SecurityAnalysis({
       }
     } finally {
       setLoading(false);
+      setAbortController(null);
     }
   }, [apiUrl, filterCodeFiles, repoData.repoStructure, repoData.selectedRepo]);
+
+  const handleStop = () => {
+    if (abortController) {
+      abortController.abort();
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (
@@ -147,7 +181,7 @@ export default function SecurityAnalysis({
 
   useEffect(() => {
     setHasFetched(false);
-    setSecurityAnalysis(null);
+    setSecurityAnalysis("");
   }, [repoData.selectedRepo]);
 
   useEffect(() => {
@@ -163,9 +197,11 @@ export default function SecurityAnalysis({
             const language =
               className?.replace("language-", "") || "javascript";
             return (
-              <pre className={`language-${language} rounded-lg`}>
-                <code className={`language-${language}`} {...props}>
-                  {children}
+              <pre
+                className={`language-${language} rounded-lg p-4 my-3 bg-[#1e1e1e]`}
+              >
+                <code className={`language-${language}`}>
+                  {String(children).replace(/\n$/, "")}
                 </code>
               </pre>
             );
@@ -214,6 +250,12 @@ export default function SecurityAnalysis({
               <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
             </div>
           </div>
+          <button
+            onClick={handleStop}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors w-full"
+          >
+            Detener análisis
+          </button>
         </div>
       </div>
     );
@@ -254,12 +296,22 @@ export default function SecurityAnalysis({
               {renderMarkdown(securityAnalysis)}
             </div>
           </div>
-          <button
-            onClick={performAnalysis}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors w-full"
-          >
-            Realizar nuevo análisis
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={performAnalysis}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex-1"
+            >
+              Actualizar análisis
+            </button>
+            {loading && (
+              <button
+                onClick={handleStop}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              >
+                Detener
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <p className="text-gray-400 italic">
