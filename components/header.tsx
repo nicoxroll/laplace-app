@@ -3,11 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertCircle,
   Bot,
   Cat,
   ChevronDown,
   Code2,
   FileText,
+  GitPullRequest,
   Menu,
   Plus,
   Settings,
@@ -105,7 +107,32 @@ export function Header({
             <Code2 className="h-4 w-4" />
             Code
           </Button>
+          <Button
+            variant="ghost"
+            className={`flex items-center gap-2 px-3 py-2 h-auto rounded-none ${
+              activeSection === "pull-requests"
+                ? "border-b-2 border-[#f78166]"
+                : "text-gray-300 hover:bg-[#30363d]"
+            }`}
+            onClick={() => onSectionChange("pull-requests")}
+          >
+            <GitPullRequest className="h-4 w-4" />
+            Pull Requests
+          </Button>
 
+          {/* Nueva pestaña Issues */}
+          <Button
+            variant="ghost"
+            className={`flex items-center gap-2 px-3 py-2 h-auto rounded-none ${
+              activeSection === "issues"
+                ? "border-b-2 border-[#f78166]"
+                : "text-gray-300 hover:bg-[#30363d]"
+            }`}
+            onClick={() => onSectionChange("issues")}
+          >
+            <AlertCircle className="h-4 w-4" />
+            Issues
+          </Button>
           <Button
             variant="ghost"
             className={`flex items-center gap-2 px-3 py-2 h-auto rounded-none ${

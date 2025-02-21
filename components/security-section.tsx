@@ -12,7 +12,7 @@ interface RepoItem {
   path: string;
 }
 
-interface FlowSidebarProps {
+interface SecuritySectionProps {
   apiUrl: string;
   repoData: {
     repoStructure: RepoItem[];
@@ -43,7 +43,7 @@ const CONFIG_PATTERNS = [
 export default function SecurityAnalysis({
   apiUrl,
   repoData,
-}: FlowSidebarProps) {
+}: SecuritySectionProps) {
   const [securityAnalysis, setSecurityAnalysis] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

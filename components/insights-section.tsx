@@ -1,6 +1,6 @@
 "use client";
 
-import { File, FileText, Folder, Loader2 } from "lucide-react";
+import { File, FileText, Folder } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { Cell, Legend, Pie, PieChart, Tooltip } from "recharts";
@@ -9,7 +9,7 @@ interface TreeNode {
   name: string;
   path: string;
   type: "dir" | "file";
-  size?: number; // Tamaño del archivo
+  size?: number;
   children?: TreeNode[];
 }
 
@@ -93,7 +93,7 @@ export function InsightsSection({
             }
           );
           const fileData = await response.json();
-          node.size = fileData.size; // Tamaño del archivo
+          node.size = fileData.size;
         }
 
         return node;
@@ -158,25 +158,20 @@ export function InsightsSection({
   }, [selectedRepo, session?.accessToken]);
 
   return (
-    <div className="max-w-4xl p-4 bg-[#161b22] rounded-lg space-y-6">
-      <h2 className="text-xl font-bold flex items-center gap-2">
-        <FileText className="h-5 w-5" /> Repository Insights
+    <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
+      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
+        <FileText className="h-6 w-6" />
+        Repository Insights - {selectedRepo || "Sin repositorio seleccionado"}
       </h2>
 
       {selectedRepo ? (
         <div className="space-y-6">
           {loading && (
-            <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                Analizando repositorio...
-              </h2>
-              <div className="space-y-4">
-                <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
-                  <div className="flex flex-col gap-2">
-                    <div className="h-4 bg-gray-700 rounded w-3/4 animate-pulse" />
-                    <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
-                  </div>
+            <div className="space-y-4">
+              <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
+                <div className="flex flex-col gap-2">
+                  <div className="h-4 bg-gray-700 rounded w-3/4 animate-pulse" />
+                  <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
                 </div>
               </div>
             </div>
@@ -184,8 +179,8 @@ export function InsightsSection({
 
           {!loading && !error && (
             <>
-              <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
-                <h3 className="text-lg font-semibold mb-4">
+              <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+                <h3 className="text-lg font-semibold mb-4 text-gray-200">
                   Distribución de archivos
                 </h3>
                 <div className="flex justify-center">
@@ -235,8 +230,8 @@ export function InsightsSection({
                 </div>
               </div>
 
-              <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
-                <h3 className="text-lg font-semibold mb-4">
+              <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+                <h3 className="text-lg font-semibold mb-4 text-gray-200">
                   Estructura del Repositorio
                 </h3>
                 <div className="max-h-[400px] overflow-y-auto font-mono text-sm">
@@ -247,15 +242,15 @@ export function InsightsSection({
           )}
 
           {error && (
-            <div className="text-red-400 p-4 border border-red-400/30 rounded-lg">
-              {error}
+            <div className="p-4 bg-red-500/20 rounded-lg border border-red-500/30">
+              <p className="text-red-400">{error}</p>
             </div>
           )}
         </div>
       ) : (
-        <div className="p-4 text-gray-400 rounded-lg">
-          <p className="italic">
-            Selecciona un repositorio para comenzar el análisis
+        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+          <p className="text-gray-400 italic">
+            Selecciona un repositorio para ver los insights
           </p>
         </div>
       )}

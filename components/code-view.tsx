@@ -8,9 +8,11 @@ import ChatSidebar from "./chat-sidebar";
 import { CodeViewer } from "./code-viewer";
 import { Header } from "./header";
 import { InsightsSection } from "./insights-section";
+import { IssuesSection } from "./issues-section";
 import { LoginButton } from "./login-button";
+import { PullRequestsSection } from "./pull-request-section";
 import { RepositoryList } from "./repository-list";
-import FlowSidebar from "./security-section";
+import SecuritySection from "./security-section";
 
 interface RepoItem {
   name: string;
@@ -241,9 +243,16 @@ export default function Component() {
                   )}
                 </>
               )}
+              {activeSection === "pull-requests" && (
+                <PullRequestsSection selectedRepo={selectedRepo} />
+              )}
+
+              {activeSection === "issues" && (
+                <IssuesSection selectedRepo={selectedRepo} />
+              )}
 
               {activeSection === "security" && (
-                <FlowSidebar
+                <SecuritySection
                   apiUrl={
                     process.env.API_FLOW_URL ||
                     "http://localhost:1234/v1/chat/completions"
@@ -260,9 +269,7 @@ export default function Component() {
                 <InsightsSection selectedRepo={selectedRepo} />
               )}
 
-              {activeSection === "agents" && (
-                <AgentsSection selectedRepo={selectedRepo} />
-              )}
+              {activeSection === "agents" && <AgentsSection />}
             </div>
           )}
         </main>
