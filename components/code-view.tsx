@@ -191,7 +191,7 @@ export default function Component() {
         >
           {!session?.user ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <h1 className="text-2xl font-bold mb-4">Welcome to LaPlace</h1>
+              <h1 className="text-2xl font-bold mb-4">Welcome to Laplace</h1>
               <p className="mb-4">Please sign in to view your repositories.</p>
               <LoginButton />
             </div>
@@ -254,7 +254,7 @@ export default function Component() {
               {activeSection === "security" && (
                 <SecuritySection
                   apiUrl={
-                    process.env.API_FLOW_URL ||
+                    process.env.NEXT_PUBLIC_API_SEC_URL ||
                     "http://localhost:1234/v1/chat/completions"
                   }
                   repoData={{
@@ -277,7 +277,8 @@ export default function Component() {
         {session?.user && (
           <ChatSidebar
             apiUrl={
-              process.env.API_URL || "http://localhost:1234/v1/chat/completions"
+              process.env.NEXT_PUBLIC_API_SEC_URL ||
+              "http://localhost:1234/v1/chat/completions"
             }
             isOpen={isChatSidebarOpen}
             onToggle={() => setIsChatSidebarOpen(!isChatSidebarOpen)}

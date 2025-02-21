@@ -62,6 +62,7 @@ export function RepositoryList({
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState(defaultBranch);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   const fetchWithCache = useCallback(
     async (
@@ -69,7 +70,6 @@ export function RepositoryList({
       options: RequestInit,
       retries = Infinity
     ): Promise<any> => {
-      // Retries infinitos
       const cacheKey = `${url}|${selectedBranch}`;
       const cached = apiCache.get(cacheKey);
 
@@ -78,7 +78,6 @@ export function RepositoryList({
       }
 
       while (true) {
-        // Bucle infinito para reintentos
         try {
           const response = await fetch(url, options);
 
@@ -89,13 +88,13 @@ export function RepositoryList({
               await new Promise((resolve) =>
                 setTimeout(resolve, Math.max(waitTime, 0))
               );
-              continue; // Reintentar después de esperar
+              continue;
             }
           }
 
           if (!response.ok) {
             if (response.status === 404) {
-              await new Promise((resolve) => setTimeout(resolve, 2000)); // Espera 2 segundos para 404
+              await new Promise((resolve) => setTimeout(resolve, 2000));
               continue;
             }
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -107,7 +106,7 @@ export function RepositoryList({
         } catch (error) {
           if (retries > 0) {
             retries--;
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // Espera 2 segundos entre reintentos
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           } else {
             throw error;
           }
@@ -152,6 +151,7 @@ export function RepositoryList({
       onRepoSelect?.("", "");
       onPathChange?.("");
       setHistory([]);
+      setSelectedItem(null);
     }
   }, [selectedRepo, onRepoSelect, onPathChange]);
 
@@ -194,6 +194,7 @@ export function RepositoryList({
 
         setContents(filteredData);
         onPathChange?.(path);
+        setSelectedItem(null);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Error al cargar contenido"
@@ -209,10 +210,12 @@ export function RepositoryList({
     setHistory(newHistory);
     onPathChange?.(prevPath);
     fetchRepoContents(selectedRepo!, prevPath);
+    setSelectedItem(null);
   };
 
   const handleFileClick = useCallback(
     async (item: GitHubContent) => {
+      setSelectedItem(item.path);
       if (item.type === "dir") {
         const newPath = item.path;
         setHistory((prev) => [...prev, currentPath]);
@@ -293,6 +296,7 @@ export function RepositoryList({
                 onRepoSelect?.("", "");
                 onPathChange?.("");
                 setHistory([]);
+                setSelectedItem(null);
               }}
               className="text-gray-300 hover:bg-[#30363d] w-full justify-start"
             >
@@ -356,7 +360,11 @@ export function RepositoryList({
                 <Button
                   key={item.path}
                   variant="ghost"
-                  className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-2"
+                  className={`w-full justify-start gap-2 text-sm py-2 ${
+                    selectedItem === item.path
+                      ? "bg-blue-500/20 text-blue-400 border-l-4 border-blue-500"
+                      : "text-gray-300 hover:bg-[#30363d]"
+                  }`}
                   onClick={() => handleFileClick(item)}
                 >
                   {item.type === "dir" ? (
@@ -407,8 +415,13 @@ export function RepositoryList({
               <Button
                 key={repo.id}
                 variant="ghost"
-                className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-6"
+                className={`w-full justify-start gap-2 text-sm py-6 ${
+                  selectedItem === repo.full_name
+                    ? "bg-blue-500/20 text-blue-400 border-l-4 border-blue-500"
+                    : "text-gray-300 hover:bg-[#30363d]"
+                }`}
                 onClick={() => {
+                  setSelectedItem(repo.full_name);
                   onRepoSelect?.(repo.full_name, repo.default_branch);
                   setSelectedBranch(repo.default_branch);
                   fetchRepoContents(repo.full_name);

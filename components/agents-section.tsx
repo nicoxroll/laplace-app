@@ -22,9 +22,9 @@ const initialNodes = [
     id: "1",
     type: "custom",
     data: {
-      label: "Agente Director",
+      label: "Laplace",
       description: "Administra a los agentes",
-      apiUrl: "https://api.director.com",
+      apiUrl: process.env.NEXT_PUBLIC_API_URL,
     },
     position: { x: 250, y: 5 },
   },
@@ -34,7 +34,7 @@ const initialNodes = [
     data: {
       label: "Alan",
       description: "Analista Ciberseguridad",
-      apiUrl: "https://api.alan.com",
+      apiUrl: process.env.NEXT_PUBLIC_API_SEC_URL,
     },
     position: { x: 100, y: 100 },
   },
@@ -128,12 +128,12 @@ export function AgentsSection() {
 
       <div className="space-y-6">
         {/* Barra de búsqueda y botón de agregar */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-col sm:flex-row">
           <div className="relative flex-1">
             <input
               type="text"
               placeholder="Buscar agentes..."
-              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
+              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -141,7 +141,7 @@ export function AgentsSection() {
           </div>
           <button
             onClick={() => setShowAddForm(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap"
           >
             <Plus className="h-4 w-4" />
             Nuevo Agente
@@ -157,18 +157,20 @@ export function AgentsSection() {
             {filteredAgents.map((node) => (
               <div
                 key={node.id}
-                className="flex items-center justify-between p-3 bg-[#161b22] rounded border border-[#30363d] hover:border-blue-500 transition-colors"
+                className="flex items-center justify-between p-3 bg-[#161b22] rounded border border-[#30363d] hover:border-blue-500 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <Bot className="h-5 w-5 text-blue-400" />
                   <div>
-                    <h4 className="text-gray-200">{node.data.label}</h4>
-                    <p className="text-xs text-gray-400">
+                    <h4 className="text-gray-200 font-medium">
+                      {node.data.label}
+                    </h4>
+                    <p className="text-xs text-gray-400 mt-1">
                       {node.data.description}
                     </p>
                   </div>
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 font-mono">
                   {node.data.apiUrl}
                 </span>
               </div>
@@ -186,7 +188,7 @@ export function AgentsSection() {
           <h3 className="text-sm font-semibold mb-3 text-gray-400">
             Diagrama de Jerarquía
           </h3>
-          <div style={{ height: "500px" }}>
+          <div className="h-[500px] rounded-lg overflow-hidden">
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -251,7 +253,7 @@ export function AgentsSection() {
                     setNewAgent({ ...newAgent, label: e.target.value })
                   }
                   placeholder="Nombre del agente"
-                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <input
                   type="text"
@@ -260,7 +262,7 @@ export function AgentsSection() {
                     setNewAgent({ ...newAgent, description: e.target.value })
                   }
                   placeholder="Descripción"
-                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <input
                   type="text"
@@ -269,7 +271,7 @@ export function AgentsSection() {
                     setNewAgent({ ...newAgent, apiUrl: e.target.value })
                   }
                   placeholder="URL de la API"
-                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 rounded border border-[#30363d] bg-[#0d1117] text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
                   onClick={handleAddAgent}
