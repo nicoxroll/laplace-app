@@ -3,21 +3,14 @@
 import { File, FileText, Folder, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
-import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
-import "reactflow/dist/style.css";
 import { Cell, Legend, Pie, PieChart, Tooltip } from "recharts";
 
 interface TreeNode {
   name: string;
   path: string;
   type: "dir" | "file";
+  size?: number; // Tamaño del archivo
   children?: TreeNode[];
-}
-
-interface FileTypeData {
-  name: string;
-  value: number;
-  color: string;
 }
 
 const COLORS = [
@@ -29,10 +22,6 @@ const COLORS = [
   "#a5d6ff",
 ];
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 60;
-const LEVEL_SPACING = 300;
-
 export function InsightsSection({
   selectedRepo,
 }: {
@@ -42,64 +31,6 @@ export function InsightsSection({
   const [repoStructure, setRepoStructure] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // Generar datos para el gráfico de nodos
-  const { nodes, edges } = useMemo(() => {
-    const nodes: any[] = [];
-    const edges: any[] = [];
-    let xPos = 0;
-    let yPos = 0;
-
-    const processNode = (node: TreeNode, parentId?: string, depth = 0) => {
-      const id = node.path;
-      const isDir = node.type === "dir";
-
-      // Posicionamiento
-      xPos = depth * LEVEL_SPACING;
-      yPos += NODE_HEIGHT + 20;
-
-      nodes.push({
-        id,
-        data: {
-          label: (
-            <div className="flex items-center gap-2 p-2">
-              {isDir ? (
-                <Folder className="h-4 w-4 text-[#58a6ff]" />
-              ) : (
-                <File className="h-4 w-4 text-[#7ee787]" />
-              )}
-              <span className="text-sm text-white">{node.name}</span>
-            </div>
-          ),
-        },
-        position: { x: xPos, y: yPos },
-        style: {
-          background: isDir ? "#1f2937" : "#374151",
-          border: "1px solid #30363d",
-          borderRadius: "6px",
-          width: `${NODE_WIDTH}px`,
-        },
-      });
-
-      if (parentId) {
-        edges.push({
-          id: `${parentId}-${id}`,
-          source: parentId,
-          target: id,
-          animated: isDir,
-          style: {
-            stroke: "#3f3f46",
-            strokeWidth: 2,
-          },
-        });
-      }
-
-      node.children?.forEach((child) => processNode(child, id, depth + 1));
-    };
-
-    repoStructure.forEach((node) => processNode(node));
-    return { nodes, edges };
-  }, [repoStructure]);
 
   const fileTypeDistribution = useMemo(() => {
     const countMap: Record<string, number> = {};
@@ -152,11 +83,46 @@ export function InsightsSection({
           );
           const dirContents = await response.json();
           node.children = await buildTree(dirContents, owner, repo);
+        } else if (node.type === "file" && session?.accessToken) {
+          const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.accessToken}`,
+              },
+            }
+          );
+          const fileData = await response.json();
+          node.size = fileData.size; // Tamaño del archivo
         }
 
         return node;
       })
     );
+  };
+
+  const renderTree = (nodes: TreeNode[], level = 0) => {
+    return nodes.map((node) => (
+      <div key={node.path} className="ml-4">
+        <div className="flex items-center gap-2 py-1">
+          <div
+            className="flex items-center gap-2 text-gray-300 hover:bg-[#1f2937] px-2 rounded"
+            style={{ marginLeft: `${level * 20}px` }}
+          >
+            {node.type === "dir" ? (
+              <Folder className="h-4 w-4 text-[#58a6ff]" />
+            ) : (
+              <File className="h-4 w-4 text-[#7ee787]" />
+            )}
+            <span className="text-sm">{node.name}</span>
+            {node.type === "file" && node.size && (
+              <span className="text-xs text-gray-400">({node.size} bytes)</span>
+            )}
+          </div>
+        </div>
+        {node.children && renderTree(node.children, level + 1)}
+      </div>
+    ));
   };
 
   useEffect(() => {
@@ -200,89 +166,84 @@ export function InsightsSection({
       {selectedRepo ? (
         <div className="space-y-6">
           {loading && (
-            <div className="flex justify-center items-center gap-2 text-white">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Analizando repositorio...
-            </div>
-          )}
-
-          {!loading && !error && (
-            <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
-              <h3 className="text-lg font-semibold mb-4">
-                Distribución de archivos
-              </h3>
-              <div className="flex justify-center">
-                <PieChart width={500} height={300}>
-                  <Pie
-                    data={fileTypeDistribution}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    innerRadius={50}
-                    paddingAngle={2}
-                    dataKey="value"
-                    isAnimationActive={true}
-                    animationBegin={100}
-                    animationDuration={400}
-                    animationEasing="ease-out"
-                  >
-                    {fileTypeDistribution.map((entry, index) => (
-                      <Cell
-                        key={index}
-                        fill={entry.color}
-                        stroke="#0d1117"
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0d1117",
-                      border: "1px solid #30363d",
-                      borderRadius: "6px",
-                    }}
-                    itemStyle={{ color: "#c9d1d9" }}
-                  />
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconSize={12}
-                    wrapperStyle={{
-                      color: "#8b949e",
-                      fontSize: "14px",
-                      paddingLeft: "20px",
-                    }}
-                  />
-                </PieChart>
+            <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                Analizando repositorio...
+              </h2>
+              <div className="space-y-4">
+                <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 bg-gray-700 rounded w-3/4 animate-pulse" />
+                    <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {!loading && !error && (
-            <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d] h-[600px]">
-              <h3 className="text-lg font-semibold mb-4">
-                Estructura del Repositorio
-              </h3>
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                fitView
-                nodesDraggable={true}
-                nodesConnectable={false}
-                panOnDrag={true}
-                zoomOnScroll={true}
-              >
-                <Background color="#30363d" gap={20} />
-                <Controls />
-                <MiniMap
-                  nodeColor={(n) =>
-                    n.data.props?.isDir ? "#58a6ff" : "#7ee787"
-                  }
-                  maskColor="#30363d"
-                />
-              </ReactFlow>
-            </div>
+            <>
+              <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
+                <h3 className="text-lg font-semibold mb-4">
+                  Distribución de archivos
+                </h3>
+                <div className="flex justify-center">
+                  <PieChart width={500} height={300}>
+                    <Pie
+                      data={fileTypeDistribution}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      innerRadius={50}
+                      paddingAngle={2}
+                      dataKey="value"
+                      isAnimationActive={true}
+                      animationBegin={100}
+                      animationDuration={400}
+                      animationEasing="ease-out"
+                    >
+                      {fileTypeDistribution.map((entry, index) => (
+                        <Cell
+                          key={index}
+                          fill={entry.color}
+                          stroke="#0d1117"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#0d1117",
+                        border: "1px solid #30363d",
+                        borderRadius: "6px",
+                      }}
+                      itemStyle={{ color: "#c9d1d9" }}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      iconSize={12}
+                      wrapperStyle={{
+                        color: "#8b949e",
+                        fontSize: "14px",
+                        paddingLeft: "20px",
+                      }}
+                    />
+                  </PieChart>
+                </div>
+              </div>
+
+              <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d]">
+                <h3 className="text-lg font-semibold mb-4">
+                  Estructura del Repositorio
+                </h3>
+                <div className="max-h-[400px] overflow-y-auto font-mono text-sm">
+                  {renderTree(repoStructure)}
+                </div>
+              </div>
+            </>
           )}
 
           {error && (
@@ -292,8 +253,10 @@ export function InsightsSection({
           )}
         </div>
       ) : (
-        <div className="p-4 text-gray-400 border border-[#30363d] rounded-lg">
-          Selecciona un repositorio para ver el análisis
+        <div className="p-4 text-gray-400 rounded-lg">
+          <p className="italic">
+            Selecciona un repositorio para comenzar el análisis
+          </p>
         </div>
       )}
     </div>

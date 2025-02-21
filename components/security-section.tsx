@@ -90,7 +90,7 @@ export default function SecurityAnalysis({
             {
               role: "system",
               content:
-                "Eres un experto en seguridad de código. Analiza en español los siguientes archivos y detecta posibles vulnerabilidades. Organiza los resultados en formato markdown con secciones claras, viñetas y ejemplos de código cuando sea relevante.",
+                "Eres un experto en seguridad de código. Analiza en el idioma que te hablan los siguientes archivos y detecta posibles vulnerabilidades. Organiza los resultados en formato markdown con secciones claras, viñetas y ejemplos de código cuando sea relevante.",
             },
             {
               role: "user",
@@ -250,12 +250,6 @@ export default function SecurityAnalysis({
               <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
             </div>
           </div>
-          <button
-            onClick={handleStop}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors w-full"
-          >
-            Detener análisis
-          </button>
         </div>
       </div>
     );

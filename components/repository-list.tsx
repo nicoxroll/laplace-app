@@ -3,9 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronUp, File, Folder, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-// Cache para almacenar respuestas de la API
 const apiCache = new Map<string, any>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
@@ -64,9 +63,13 @@ export function RepositoryList({
   const [selectedBranch, setSelectedBranch] = useState(defaultBranch);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Función de fetch con cache y reintentos
   const fetchWithCache = useCallback(
-    async (url: string, options: RequestInit, retries = 3): Promise<any> => {
+    async (
+      url: string,
+      options: RequestInit,
+      retries = Infinity
+    ): Promise<any> => {
+      // Retries infinitos
       const cacheKey = `${url}|${selectedBranch}`;
       const cached = apiCache.get(cacheKey);
 
@@ -74,60 +77,76 @@ export function RepositoryList({
         return cached.data;
       }
 
-      try {
-        const response = await fetch(url, options);
+      while (true) {
+        // Bucle infinito para reintentos
+        try {
+          const response = await fetch(url, options);
 
-        if (response.status === 403) {
-          const resetTime = response.headers.get("X-RateLimit-Reset");
-          if (resetTime) {
-            const waitTime = parseInt(resetTime) * 1000 - Date.now();
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-            return fetchWithCache(url, options, retries);
+          if (response.status === 403) {
+            const resetTime = response.headers.get("X-RateLimit-Reset");
+            if (resetTime) {
+              const waitTime = parseInt(resetTime) * 1000 - Date.now();
+              await new Promise((resolve) =>
+                setTimeout(resolve, Math.max(waitTime, 0))
+              );
+              continue; // Reintentar después de esperar
+            }
+          }
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              await new Promise((resolve) => setTimeout(resolve, 2000)); // Espera 2 segundos para 404
+              continue;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          apiCache.set(cacheKey, { data, timestamp: Date.now() });
+          return data;
+        } catch (error) {
+          if (retries > 0) {
+            retries--;
+            await new Promise((resolve) => setTimeout(resolve, 2000)); // Espera 2 segundos entre reintentos
+          } else {
+            throw error;
           }
         }
-
-        if (!response.ok)
-          throw new Error(`HTTP error! status: ${response.status}`);
-
-        const data = await response.json();
-        apiCache.set(cacheKey, { data, timestamp: Date.now() });
-        return data;
-      } catch (error) {
-        if (retries > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          return fetchWithCache(url, options, retries - 1);
-        }
-        throw error;
       }
     },
     [selectedBranch]
   );
 
-  // Obtener repositorios con cache
+  const retryLoad = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      if (selectedRepo) {
+        await fetchRepoContents(selectedRepo, currentPath);
+      } else {
+        const data = await fetchWithCache(
+          "https://api.github.com/user/repos?sort=updated&per_page=100",
+          {
+            headers: {
+              Authorization: `Bearer ${session?.accessToken}`,
+            },
+          }
+        );
+        setRepositories(data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRepo, currentPath, session, fetchWithCache]);
+
   useEffect(() => {
     if (session?.accessToken) {
-      const fetchRepos = async () => {
-        try {
-          const data = await fetchWithCache(
-            "https://api.github.com/user/repos?sort=updated&per_page=100",
-            {
-              headers: {
-                Authorization: `Bearer ${session.accessToken}`,
-              },
-            }
-          );
-          setRepositories(data);
-          setLoading(false);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Error desconocido");
-          setLoading(false);
-        }
-      };
-      fetchRepos();
+      retryLoad();
     }
-  }, [session, fetchWithCache]);
+  }, [session, retryLoad]);
 
-  // Inicializar el componente al cargar
   useEffect(() => {
     if (!selectedRepo) {
       onRepoSelect?.("", "");
@@ -136,7 +155,6 @@ export function RepositoryList({
     }
   }, [selectedRepo, onRepoSelect, onPathChange]);
 
-  // Obtener branches con cache
   useEffect(() => {
     if (selectedRepo) {
       const fetchBranches = async () => {
@@ -158,7 +176,6 @@ export function RepositoryList({
     }
   }, [selectedRepo, session?.accessToken, fetchWithCache]);
 
-  // Obtener contenido con cache y recursive fetching
   const fetchRepoContents = useCallback(
     async (fullName: string, path: string = "") => {
       try {
@@ -178,13 +195,9 @@ export function RepositoryList({
         setContents(filteredData);
         onPathChange?.(path);
       } catch (err) {
-        if (err instanceof Error && err.message.includes("404")) {
-          console.log("Recurso no encontrado. Por favor, verifica la ruta.");
-        } else {
-          setError(
-            err instanceof Error ? err.message : "Error al cargar contenido"
-          );
-        }
+        setError(
+          err instanceof Error ? err.message : "Error al cargar contenido"
+        );
       }
     },
     [selectedBranch, session?.accessToken, onPathChange, fetchWithCache]
@@ -198,7 +211,6 @@ export function RepositoryList({
     fetchRepoContents(selectedRepo!, prevPath);
   };
 
-  // Manejo de clic en archivo/directorio
   const handleFileClick = useCallback(
     async (item: GitHubContent) => {
       if (item.type === "dir") {
@@ -241,10 +253,10 @@ export function RepositoryList({
       fetchWithCache,
       currentPath,
       onPathChange,
+      fetchRepoContents,
     ]
   );
 
-  // Filtros optimizados
   const filteredRepositories = repositories.filter(
     (repo) =>
       repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -255,10 +267,24 @@ export function RepositoryList({
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const renderError = useMemo(
+    () => (
+      <div className="p-4 flex flex-col items-center gap-3">
+        <div className="text-red-400">{error}</div>
+        <Button
+          onClick={retryLoad}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          Reintentar
+        </Button>
+      </div>
+    ),
+    [error, retryLoad]
+  );
+
   if (selectedRepo) {
     return (
       <div className="flex flex-col h-full">
-        {/* Header fijo */}
         <div className="sticky top-0 bg-[#0d1117] z-10 space-y-2 px-2 pb-4">
           <div className="flex flex-col gap-2">
             <Button
@@ -275,7 +301,7 @@ export function RepositoryList({
             </Button>
 
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+              <Search className="absolute left-3 top-2 h-4 w-4 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search files..."
@@ -293,11 +319,18 @@ export function RepositoryList({
                   setSelectedBranch(e.target.value);
                   fetchRepoContents(selectedRepo, currentPath);
                 }}
-                className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300 flex-1"
+                className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300 flex-1 truncate"
               >
                 {branches.map((branch) => (
-                  <option key={branch.name} value={branch.name}>
-                    {branch.name}
+                  <option
+                    key={branch.name}
+                    value={branch.name}
+                    className="truncate"
+                    title={branch.name}
+                  >
+                    {branch.name.length > 12
+                      ? `${branch.name.substring(0, 12)}...`
+                      : branch.name}
                   </option>
                 ))}
               </select>
@@ -316,26 +349,27 @@ export function RepositoryList({
           </div>
         </div>
 
-        {/* Lista de archivos con scroll */}
         <div className="flex-1 overflow-y-auto px-2">
-          {filteredContents.map((item) => (
-            <Button
-              key={item.path}
-              variant="ghost"
-              className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-2"
-              onClick={() => handleFileClick(item)}
-            >
-              {item.type === "dir" ? (
-                <Folder className="h-4 w-4" />
-              ) : (
-                <File className="h-4 w-4" />
-              )}
-              {item.name}
-              {item.type === "dir" && (
-                <ChevronRight className="h-4 w-4 ml-auto" />
-              )}
-            </Button>
-          ))}
+          {error
+            ? renderError
+            : filteredContents.map((item) => (
+                <Button
+                  key={item.path}
+                  variant="ghost"
+                  className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-2"
+                  onClick={() => handleFileClick(item)}
+                >
+                  {item.type === "dir" ? (
+                    <Folder className="h-4 w-4" />
+                  ) : (
+                    <File className="h-4 w-4" />
+                  )}
+                  {item.name}
+                  {item.type === "dir" && (
+                    <ChevronRight className="h-4 w-4 ml-auto" />
+                  )}
+                </Button>
+              ))}
         </div>
       </div>
     );
@@ -343,10 +377,9 @@ export function RepositoryList({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Buscador fijo */}
       <div className="sticky top-0 bg-[#0d1117] z-10 px-2 pb-4">
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+          <Search className="absolute left-3 top-2 h-4 w-4 text-gray-500" />
           <input
             type="text"
             placeholder="Search repositories..."
@@ -357,43 +390,46 @@ export function RepositoryList({
         </div>
       </div>
 
-      {/* Lista de repositorios con scroll */}
       <div className="flex-1 overflow-y-auto px-2">
         {loading && (
           <div className="p-4 text-gray-400">Loading repositories...</div>
         )}
 
-        {error && <div className="p-4 text-red-400">Error: {error}</div>}
+        {error ? (
+          renderError
+        ) : (
+          <>
+            {filteredRepositories.length === 0 && (
+              <div className="p-4 text-gray-400">No repositories found</div>
+            )}
 
-        {!loading && !error && filteredRepositories.length === 0 && (
-          <div className="p-4 text-gray-400">No repositories found</div>
+            {filteredRepositories.map((repo) => (
+              <Button
+                key={repo.id}
+                variant="ghost"
+                className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-6"
+                onClick={() => {
+                  onRepoSelect?.(repo.full_name, repo.default_branch);
+                  setSelectedBranch(repo.default_branch);
+                  fetchRepoContents(repo.full_name);
+                }}
+              >
+                <Folder className="h-4 w-4 shrink-0" />
+                <div className="flex flex-col items-start text-left">
+                  <span className="font-medium">{repo.name}</span>
+                  {repo.description && (
+                    <span className="text-xs text-gray-400 truncate max-w-full">
+                      {repo.description}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500 mt-1">
+                    Default branch: {repo.default_branch}
+                  </span>
+                </div>
+              </Button>
+            ))}
+          </>
         )}
-
-        {filteredRepositories.map((repo) => (
-          <Button
-            key={repo.id}
-            variant="ghost"
-            className="w-full justify-start gap-2 text-sm text-gray-300 hover:bg-[#30363d] py-6"
-            onClick={() => {
-              onRepoSelect?.(repo.full_name, repo.default_branch);
-              setSelectedBranch(repo.default_branch);
-              fetchRepoContents(repo.full_name);
-            }}
-          >
-            <Folder className="h-4 w-4 shrink-0" />
-            <div className="flex flex-col items-start text-left">
-              <span className="font-medium">{repo.name}</span>
-              {repo.description && (
-                <span className="text-xs text-gray-400 truncate max-w-full">
-                  {repo.description}
-                </span>
-              )}
-              <span className="text-xs text-gray-500 mt-1">
-                Default branch: {repo.default_branch}
-              </span>
-            </div>
-          </Button>
-        ))}
       </div>
     </div>
   );
