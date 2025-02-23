@@ -262,5 +262,9 @@ code[class*="language-"] {
 .dot-flashing .dot:nth-child(3) {
   animation-delay: 0.4s;
 }
+@keyframes dotFlashing {
+  0% { background-color: #58a6ff; }
+  50%, 100% { background-color: rgba(88, 166, 255, 0.2); } 
 
+}
 }

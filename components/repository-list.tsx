@@ -67,8 +67,8 @@ export function RepositoryList({
   const fetchWithCache = useCallback(
     async (
       url: string,
-      options: RequestInit,
-      retries = Infinity
+      options: RequestInit = {},
+      retries = 3
     ): Promise<any> => {
       const cacheKey = `${url}|${selectedBranch}`;
       const cached = apiCache.get(cacheKey);
@@ -77,9 +77,15 @@ export function RepositoryList({
         return cached.data;
       }
 
-      while (true) {
+      let attempt = 0;
+      while (attempt <= retries) {
+        attempt++;
         try {
-          const response = await fetch(url, options);
+          const controller = new AbortController();
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
 
           if (response.status === 403) {
             const resetTime = response.headers.get("X-RateLimit-Reset");
@@ -104,17 +110,61 @@ export function RepositoryList({
           apiCache.set(cacheKey, { data, timestamp: Date.now() });
           return data;
         } catch (error) {
-          if (retries > 0) {
-            retries--;
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          } else {
+          if (retries <= 0 || (error as Error).name === "AbortError") {
             throw error;
           }
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
+      throw new Error(`Failed after ${retries} retries`);
     },
     [selectedBranch]
   );
+
+  const fetchRepoContents = useCallback(
+    async (fullName: string, path: string = "") => {
+      try {
+        const encodedPath = path ? encodeURIComponent(path) : "";
+        const data = await fetchWithCache(
+          `https://api.github.com/repos/${fullName}/contents/${encodedPath}?ref=${selectedBranch}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session?.accessToken}`,
+            },
+          }
+        );
+
+        const filteredData = data.filter(
+          (item: GitHubContent) => item.type === "dir" || item.type === "file"
+        );
+
+        setContents(filteredData);
+        setSelectedItem(null);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Error al cargar contenido"
+        );
+      }
+    },
+    [selectedBranch, session?.accessToken, fetchWithCache]
+  );
+
+  const fetchBranches = useCallback(async () => {
+    if (!selectedRepo) return;
+    try {
+      const data = await fetchWithCache(
+        `https://api.github.com/repos/${selectedRepo}/branches`,
+        {
+          headers: {
+            Authorization: `Bearer ${session?.accessToken}`,
+          },
+        }
+      );
+      setBranches(data);
+    } catch (err) {
+      console.error("Error fetching branches:", err);
+    }
+  }, [selectedRepo, session?.accessToken, fetchWithCache]);
 
   const retryLoad = useCallback(async () => {
     setError("");
@@ -138,13 +188,21 @@ export function RepositoryList({
     } finally {
       setLoading(false);
     }
-  }, [selectedRepo, currentPath, session, fetchWithCache]);
+  }, [selectedRepo, currentPath, session, fetchWithCache, fetchRepoContents]);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (session?.accessToken) {
       retryLoad();
     }
-  }, [session, retryLoad]);
+    return () => controller.abort();
+  }, [retryLoad, session]);
+
+  useEffect(() => {
+    if (selectedRepo) {
+      fetchBranches();
+    }
+  }, [selectedRepo, fetchBranches]);
 
   useEffect(() => {
     if (!selectedRepo) {
@@ -155,63 +213,13 @@ export function RepositoryList({
     }
   }, [selectedRepo, onRepoSelect, onPathChange]);
 
-  useEffect(() => {
-    if (selectedRepo) {
-      const fetchBranches = async () => {
-        try {
-          const data = await fetchWithCache(
-            `https://api.github.com/repos/${selectedRepo}/branches`,
-            {
-              headers: {
-                Authorization: `Bearer ${session?.accessToken}`,
-              },
-            }
-          );
-          setBranches(data);
-        } catch (err) {
-          console.error("Error fetching branches:", err);
-        }
-      };
-      fetchBranches();
-    }
-  }, [selectedRepo, session?.accessToken, fetchWithCache]);
-
-  const fetchRepoContents = useCallback(
-    async (fullName: string, path: string = "") => {
-      try {
-        const data = await fetchWithCache(
-          `https://api.github.com/repos/${fullName}/contents/${path}?ref=${selectedBranch}&recursive=1`,
-          {
-            headers: {
-              Authorization: `Bearer ${session?.accessToken}`,
-            },
-          }
-        );
-
-        const filteredData = data.filter(
-          (item: GitHubContent) => item.type === "dir" || item.type === "file"
-        );
-
-        setContents(filteredData);
-        onPathChange?.(path);
-        setSelectedItem(null);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Error al cargar contenido"
-        );
-      }
-    },
-    [selectedBranch, session?.accessToken, onPathChange, fetchWithCache]
-  );
-
-  const handleGoBack = () => {
+  const handleGoBack = useCallback(() => {
     const newHistory = [...history];
     const prevPath = newHistory.pop() || "";
     setHistory(newHistory);
     onPathChange?.(prevPath);
-    fetchRepoContents(selectedRepo!, prevPath);
     setSelectedItem(null);
-  };
+  }, [history, onPathChange]);
 
   const handleFileClick = useCallback(
     async (item: GitHubContent) => {
@@ -220,7 +228,6 @@ export function RepositoryList({
         const newPath = item.path;
         setHistory((prev) => [...prev, currentPath]);
         onPathChange?.(newPath);
-        fetchRepoContents(selectedRepo!, newPath);
       } else if (onFileSelect) {
         try {
           const isImage = [".jpg", ".jpeg", ".png", ".gif"].some((ext) =>
@@ -256,18 +263,25 @@ export function RepositoryList({
       fetchWithCache,
       currentPath,
       onPathChange,
-      fetchRepoContents,
     ]
   );
 
-  const filteredRepositories = repositories.filter(
-    (repo) =>
-      repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      repo.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredRepositories = useMemo(
+    () =>
+      repositories.filter(
+        (repo) =>
+          repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          repo.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [repositories, searchQuery]
   );
 
-  const filteredContents = contents.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredContents = useMemo(
+    () =>
+      contents.filter((item) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [contents, searchQuery]
   );
 
   const renderError = useMemo(
@@ -424,7 +438,6 @@ export function RepositoryList({
                   setSelectedItem(repo.full_name);
                   onRepoSelect?.(repo.full_name, repo.default_branch);
                   setSelectedBranch(repo.default_branch);
-                  fetchRepoContents(repo.full_name);
                 }}
               >
                 <Folder className="h-4 w-4 shrink-0" />

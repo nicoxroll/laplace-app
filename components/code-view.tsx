@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Folder, Github } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AgentsSection } from "./agents-section";
 import ChatSidebar from "./chat-sidebar";
 import { CodeViewer } from "./code-viewer";
@@ -38,105 +38,117 @@ export default function Component() {
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  const handleRepoSelect = async (fullName: string) => {
-    setSelectedRepo(fullName);
-    setCurrentPath("");
-    setNavHistory([]);
-    setFileContent([]);
-    setImageUrl("");
-    await fetchRepoStructure(fullName);
-  };
+  const fetchRepoStructure = useCallback(
+    async (repo?: string, path: string = ""): Promise<RepoItem[]> => {
+      const targetRepo = repo || selectedRepo;
+      if (!targetRepo) return [];
 
-  const fetchRepoStructure = async (
-    repo?: string,
-    path: string = ""
-  ): Promise<RepoItem[]> => {
-    const targetRepo = repo || selectedRepo;
-    if (!targetRepo) return [];
-
-    try {
-      const response = await fetch(
-        `https://api.github.com/repos/${targetRepo}/contents/${path}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.accessToken}`,
-            Accept: "application/vnd.github+json",
-          },
-        }
-      );
-
-      if (!response.ok) throw new Error("Error al obtener la estructura");
-      const data = await response.json();
-
-      const structure = await Promise.all(
-        data.map(async (item: any) => {
-          if (item.type === "file") {
-            const fileExtension =
-              item.name.split(".").pop()?.toLowerCase() || "";
-            const isImage = [
-              "jpg",
-              "jpeg",
-              "png",
-              "gif",
-              "bmp",
-              "webp",
-            ].includes(fileExtension);
-
-            return {
-              name: item.name,
-              type: isImage ? "image" : "file",
-              path: item.path,
-              url: isImage
-                ? `https://raw.githubusercontent.com/${targetRepo}/master/${item.path}`
-                : item.download_url,
-              content: isImage
-                ? ""
-                : await fetch(item.download_url).then((res) => res.text()),
-            };
-          } else if (item.type === "dir") {
-            const subDirStructure = await fetchRepoStructure(
-              targetRepo,
-              item.path
-            );
-            return {
-              name: item.name,
-              type: "dir",
-              path: item.path,
-              children: subDirStructure,
-            };
+      try {
+        const response = await fetch(
+          `https://api.github.com/repos/${targetRepo}/contents/${path}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session?.accessToken}`,
+              Accept: "application/vnd.github+json",
+            },
           }
-          return null;
-        })
-      );
+        );
 
-      const filteredStructure = structure.filter(
-        (item): item is RepoItem => item !== null
-      );
-      setRepoStructure(filteredStructure);
-      return filteredStructure;
-    } catch (error) {
-      console.error("Error:", error);
-      return [];
-    }
-  };
+        if (!response.ok) throw new Error("Error al obtener la estructura");
+        const data = await response.json();
 
-  const handlePathChange = async (newPath: string) => {
-    if (!selectedRepo) return;
-    setNavHistory((prev) => [...prev, currentPath]);
-    setCurrentPath(newPath);
-    setImageUrl("");
-    await fetchRepoStructure(selectedRepo, newPath);
-  };
+        const structure = await Promise.all(
+          data.map(async (item: any) => {
+            if (item.type === "file") {
+              const fileExtension =
+                item.name.split(".").pop()?.toLowerCase() || "";
+              const isImage = [
+                "jpg",
+                "jpeg",
+                "png",
+                "gif",
+                "bmp",
+                "webp",
+              ].includes(fileExtension);
+
+              return {
+                name: item.name,
+                type: isImage ? "image" : "file",
+                path: item.path,
+                url: isImage
+                  ? `https://raw.githubusercontent.com/${targetRepo}/master/${item.path}`
+                  : item.download_url,
+                content: isImage
+                  ? ""
+                  : await fetch(item.download_url).then((res) => res.text()),
+              };
+            } else if (item.type === "dir") {
+              const subDirStructure = await fetchRepoStructure(
+                targetRepo,
+                item.path
+              );
+              return {
+                name: item.name,
+                type: "dir",
+                path: item.path,
+                children: subDirStructure,
+              };
+            }
+            return null;
+          })
+        );
+
+        const filteredStructure = structure.filter(
+          (item): item is RepoItem => item !== null
+        );
+
+        // Actualizar estado solo si hay cambios
+        if (
+          JSON.stringify(filteredStructure) !== JSON.stringify(repoStructure)
+        ) {
+          setRepoStructure(filteredStructure);
+        }
+
+        return filteredStructure;
+      } catch (error) {
+        console.error("Error:", error);
+        return [];
+      }
+    },
+    [session?.accessToken, selectedRepo, repoStructure]
+  );
+
+  const handleRepoSelect = useCallback(
+    async (fullName: string) => {
+      setSelectedRepo(fullName);
+      setCurrentPath("");
+      setNavHistory([]);
+      setFileContent([]);
+      setImageUrl("");
+      await fetchRepoStructure(fullName);
+    },
+    [fetchRepoStructure]
+  );
+
+  const handlePathChange = useCallback(
+    async (newPath: string) => {
+      if (!selectedRepo) return;
+      setNavHistory((prev) => [...prev, currentPath]);
+      setCurrentPath(newPath);
+      setImageUrl("");
+      await fetchRepoStructure(selectedRepo, newPath);
+    },
+    [selectedRepo, currentPath, fetchRepoStructure]
+  );
 
   useEffect(() => {
     if (selectedRepo) {
       const loadStructure = async () => {
-        const structure = await fetchRepoStructure(selectedRepo, currentPath);
-        setRepoStructure(structure || []);
+        await fetchRepoStructure(selectedRepo, currentPath);
       };
       loadStructure();
     }
-  }, [selectedRepo, currentPath]);
+  }, [selectedRepo, currentPath, fetchRepoStructure]);
 
   if (status === "loading") {
     return <div>Loading...</div>;
@@ -259,7 +271,6 @@ export default function Component() {
                   }
                   repoData={{
                     selectedRepo,
-
                     repoStructure,
                   }}
                 />
