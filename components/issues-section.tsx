@@ -32,30 +32,49 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
 
   useEffect(() => {
     async function fetchIssues() {
-      if (!session?.accessToken || !repository) return;
+      if (!session?.user?.accessToken || !repository) return;
 
       setLoading(true);
       setError(null);
 
       try {
-        const baseUrl = repository.provider === 'github'
-          ? `https://api.github.com/repos/${repository.full_name}/issues`
+        const isGithub = repository.provider === 'github';
+        const baseUrl = isGithub
+          ? `https://api.github.com/repos/${repository.full_name}/issues?state=all`
           : `https://gitlab.com/api/v4/projects/${repository.id}/issues`;
 
         const response = await fetch(baseUrl, {
           headers: {
-            'Authorization': `Bearer ${session.accessToken}`,
-            'Accept': repository.provider === 'github'
-              ? 'application/vnd.github+json'
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Accept': isGithub 
+              ? 'application/vnd.github.v3+json'
               : 'application/json',
           },
         });
 
-        if (!response.ok) throw new Error('Failed to fetch issues');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch issues: ${response.statusText}`);
+        }
 
         const data = await response.json();
-        setIssues(data);
+        
+        // Transform GitLab data to match GitHub format
+        const transformedIssues = isGithub ? data : data.map((issue: any) => ({
+          id: issue.id,
+          number: issue.iid,
+          title: issue.title,
+          state: issue.state,
+          created_at: issue.created_at,
+          html_url: issue.web_url,
+          user: {
+            login: issue.author.username,
+            avatar_url: issue.author.avatar_url
+          }
+        }));
+
+        setIssues(transformedIssues);
       } catch (err) {
+        console.error('Error fetching issues:', err);
         setError(err instanceof Error ? err.message : 'Error fetching issues');
       } finally {
         setLoading(false);

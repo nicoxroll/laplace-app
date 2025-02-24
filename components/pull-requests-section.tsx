@@ -1,139 +1,104 @@
 // components/pull-requests-section.tsx
 "use client";
 
-import { Octokit } from "@octokit/rest";
-import { GitPullRequest, Search } from "lucide-react";
-import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useState } from "react";
-
-// Add rate limiting constants
-const RETRY_DELAY = 1000;
-const MAX_RETRIES = 3;
-
-// Add the retry utility function
-const fetchWithRetry = async (
-  fn: () => Promise<any>,
-  retries = MAX_RETRIES
-) => {
-  try {
-    return await fn();
-  } catch (error: any) {
-    if (retries > 0 && error.status === 500) {
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
-      return fetchWithRetry(fn, retries - 1);
-    }
-    throw error;
-  }
-};
+import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { GitPullRequest, Search, Loader2, AlertCircle } from 'lucide-react';
+import type { Repository } from '../types/repository';
 
 interface PullRequest {
   id: number;
+  number: number;
   title: string;
+  state: string;
+  created_at: string;
+  html_url: string;
   user: {
     login: string;
     avatar_url: string;
   };
-  state: "open" | "closed" | "merged";
-  created_at: string;
-  html_url: string;
-  number: number;
+  base: {
+    ref: string;
+  };
+  head: {
+    ref: string;
+  };
 }
 
-export function PullRequestsSection({
-  selectedRepo,
-}: {
-  selectedRepo: string | null;
-}) {
+interface PullRequestsSectionProps {
+  repository: Repository;
+}
+
+export function PullRequestsSection({ repository }: PullRequestsSectionProps) {
   const { data: session } = useSession();
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [stateFilter, setStateFilter] = useState("all");
-
-  // Create Octokit instance with rate limiting
-  const octokit = useCallback(() => {
-    return new Octokit({
-      auth: session?.accessToken,
-      throttle: {
-        onRateLimit: (
-          retryAfter: number,
-          options: any,
-          octokit: Octokit,
-          retryCount: number
-        ): boolean => {
-          if (retryCount < 2) {
-            console.warn(
-              `Rate limit exceeded, retrying after ${retryAfter} seconds`
-            );
-            return true;
-          }
-          return false;
-        },
-        onSecondaryRateLimit: (
-          retryAfter: number,
-          options: any,
-          octokit: Octokit,
-          retryCount: number
-        ): boolean => {
-          if (retryCount < 2) return true;
-          return false;
-        },
-      },
-    });
-  }, [session?.accessToken]);
-
-  const fetchPullRequests = useCallback(async () => {
-    if (!selectedRepo || !session?.accessToken) return;
-
-    try {
-      setLoading(true);
-      setError("");
-      const [owner, repo] = selectedRepo.split("/");
-
-      const github = octokit();
-
-      const { data } = await fetchWithRetry(async () => {
-        return github.pulls.list({
-          owner,
-          repo,
-          state: "all",
-          per_page: 100,
-          headers: {
-            "If-None-Match": "", // Bypass cache
-          },
-        });
-      });
-
-      setPullRequests(data);
-    } catch (err: any) {
-      console.error("Error fetching pull requests:", err);
-      setError(
-        err.status === 403
-          ? "Rate limit exceeded. Please wait a few minutes and try again."
-          : err.message || "Error desconocido"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedRepo, session?.accessToken, octokit]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // Debounce the fetch to prevent too many requests
-    const timeoutId = setTimeout(() => {
-      fetchPullRequests();
-    }, 300);
+    async function fetchPullRequests() {
+      if (!session?.user?.accessToken || !repository) return;
 
-    return () => clearTimeout(timeoutId);
-  }, [fetchPullRequests]);
+      setLoading(true);
+      setError(null);
 
-  const filteredPRs = pullRequests.filter((pr) => {
-    const matchesSearch = pr.title
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesState = stateFilter === "all" || pr.state === stateFilter;
-    return matchesSearch && matchesState;
-  });
+      try {
+        const isGithub = repository.provider === 'github';
+        const baseUrl = isGithub
+          ? `https://api.github.com/repos/${repository.full_name}/pulls?state=all`
+          : `https://gitlab.com/api/v4/projects/${repository.id}/merge_requests`;
+
+        const response = await fetch(baseUrl, {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Accept': isGithub 
+              ? 'application/vnd.github.v3+json'
+              : 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch pull requests: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // Transform GitLab data to match GitHub format
+        const transformedPRs = isGithub ? data : data.map((pr: any) => ({
+          id: pr.id,
+          number: pr.iid,
+          title: pr.title,
+          state: pr.state,
+          created_at: pr.created_at,
+          html_url: pr.web_url,
+          user: {
+            login: pr.author.username,
+            avatar_url: pr.author.avatar_url
+          },
+          base: {
+            ref: pr.target_branch
+          },
+          head: {
+            ref: pr.source_branch
+          }
+        }));
+
+        setPullRequests(transformedPRs);
+      } catch (err) {
+        console.error('Error fetching pull requests:', err);
+        setError(err instanceof Error ? err.message : 'Error fetching pull requests');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPullRequests();
+  }, [repository, session]);
+
+  const filteredPRs = pullRequests.filter(pr =>
+    pr.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -172,7 +137,7 @@ export function PullRequestsSection({
     <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
         <GitPullRequest className="h-6 w-6" />
-        Pull Requests - {selectedRepo || "Sin repositorio seleccionado"}
+        Pull Requests - {repository.full_name || "Sin repositorio seleccionado"}
       </h2>
 
       <div className="space-y-4">
@@ -187,15 +152,6 @@ export function PullRequestsSection({
             />
             <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
           </div>
-          <select
-            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-gray-300"
-            value={stateFilter}
-            onChange={(e) => setStateFilter(e.target.value)}
-          >
-            <option value="all">Todos</option>
-            <option value="open">Abiertos</option>
-            <option value="closed">Cerrados</option>
-          </select>
         </div>
 
         {filteredPRs.length === 0 ? (

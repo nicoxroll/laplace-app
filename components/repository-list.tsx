@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Bot, Github, Gitlab, Loader2, Search } from 'lucide-react';
 import type { Repository } from '../types/repository';
-import { fetchRepositories } from '../services/repository-service';
 
 interface RepositoryListProps {
   onSelect: (repository: Repository) => void;
@@ -20,30 +19,63 @@ export function RepositoryList({ onSelect, selectedRepo, className }: Repository
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const loadRepositories = async () => {
-      if (!session?.accessToken) return;
+    async function fetchRepositories() {
+      if (!session?.user?.accessToken) return;
 
       try {
-        const repos = await fetchRepositories(session);
-        setRepositories(repos);
+        const provider = session.user.provider;
+        const baseUrl = provider === 'github' 
+          ? 'https://api.github.com/user/repos'
+          : 'https://gitlab.com/api/v4/projects';
+
+        const response = await fetch(baseUrl, {
+          headers: {
+            'Authorization': `Bearer ${session.user.accessToken}`,
+            'Accept': provider === 'github' 
+              ? 'application/vnd.github+json'
+              : 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch repositories: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // Transform the data based on provider
+        const transformedData = provider === 'github' 
+          ? data
+          : data.map((repo: any) => ({
+              id: repo.id,
+              name: repo.name,
+              full_name: repo.path_with_namespace,
+              description: repo.description,
+              private: repo.visibility === 'private',
+              provider: 'gitlab',
+              owner: {
+                login: repo.namespace.name,
+                avatar_url: repo.namespace.avatar_url
+              },
+              default_branch: repo.default_branch
+            }));
+
+        setRepositories(transformedData);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error loading repositories');
+        setError(err instanceof Error ? err.message : 'Failed to fetch repositories');
+        console.error('Error fetching repositories:', err);
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    loadRepositories();
+    fetchRepositories();
   }, [session]);
 
   const filteredRepositories = repositories.filter(repo =>
     repo.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const handleSelectRepo = (repo: Repository) => {
-    onSelect(repo);
-  };
 
   if (loading) {
     return (
@@ -63,6 +95,12 @@ export function RepositoryList({ onSelect, selectedRepo, className }: Repository
           <Bot className="h-5 w-5 mr-2" />
           {error}
         </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 text-sm text-blue-400 hover:text-blue-300"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -90,7 +128,7 @@ export function RepositoryList({ onSelect, selectedRepo, className }: Repository
             filteredRepositories.map((repo) => (
               <button
                 key={`${repo.provider}-${repo.id}`}
-                onClick={() => handleSelectRepo(repo)}
+                onClick={() => onSelect(repo)}
                 className={`w-full p-3 text-left rounded-lg transition-colors group ${
                   selectedRepo?.id === repo.id 
                     ? 'bg-[#1c2128]' 
@@ -105,12 +143,8 @@ export function RepositoryList({ onSelect, selectedRepo, className }: Repository
                   )}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <img
-                      src={repo.provider === 'github' 
-                        ? repo.owner.avatar_url 
-                        : repo.namespace.avatar_url}
-                      alt={repo.provider === 'github' 
-                        ? repo.owner.login 
-                        : repo.namespace.name}
+                      src={repo.owner.avatar_url}
+                      alt={repo.owner.login}
                       className="w-6 h-6 rounded-full"
                     />
                     <div className="flex flex-col flex-1 min-w-0">

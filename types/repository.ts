@@ -27,4 +27,11 @@ export interface GitLabRepository extends BaseRepository {
   };
 }
 
-export type Repository = GitHubRepository | GitLabRepository;
+export interface Repository {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  provider: 'github' | 'gitlab';
+}

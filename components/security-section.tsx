@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldAlert } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import Prism from "prismjs";
 import "prismjs/components/prism-jsx";
 import "prismjs/components/prism-python";
@@ -9,6 +9,8 @@ import "prismjs/themes/prism-okaidia.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useSession } from 'next-auth/react';
+import type { Repository } from '../types/repository';
 
 interface RepoItem {
   name: string;
@@ -16,12 +18,23 @@ interface RepoItem {
   path: string;
 }
 
+interface SecurityAlert {
+  id: number;
+  affected_package: string;
+  severity: 'critical' | 'high' | 'moderate' | 'low';
+  title: string;
+  description: string;
+  created_at: string;
+  state: 'open' | 'fixed';
+}
+
 interface SecuritySectionProps {
-  apiUrl: string;
-  repoData: {
+  apiUrl?: string;
+  repoData?: {
     repoStructure: RepoItem[];
     selectedRepo: string | null;
   };
+  repository?: Repository;
 }
 
 const CODE_EXTENSIONS = new Set([
@@ -44,13 +57,12 @@ const CONFIG_PATTERNS = [
   /(\/|^)\..*rc(\.[jt]sx?)?$/i,
 ];
 
-export default function SecurityAnalysis({
-  apiUrl,
-  repoData,
-}: SecuritySectionProps) {
+export function SecuritySection({ apiUrl, repoData, repository }: SecuritySectionProps) {
+  const { data: session } = useSession();
+  const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [securityAnalysis, setSecurityAnalysis] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [hasFetched, setHasFetched] = useState(false);
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
@@ -77,9 +89,13 @@ export default function SecurityAnalysis({
       setSecurityAnalysis("");
       setHasFetched(true);
 
-      // Verificar que la URL de la API es válida
+      // Verificar que la URL de la API y repoData existen
       if (!apiUrl) {
         throw new Error("URL de la API no configurada");
+      }
+
+      if (!repoData?.repoStructure) {
+        throw new Error("No hay estructura del repositorio disponible");
       }
 
       const filteredCodeFiles = filterCodeFiles(repoData.repoStructure);
@@ -187,7 +203,7 @@ export default function SecurityAnalysis({
       setLoading(false);
       setAbortController(null);
     }
-  }, [apiUrl, filterCodeFiles, repoData.repoStructure, repoData.selectedRepo]);
+  }, [apiUrl, filterCodeFiles, repoData?.repoStructure, repoData?.selectedRepo]);
 
   const handleStop = () => {
     if (abortController) {
@@ -259,26 +275,73 @@ export default function SecurityAnalysis({
     []
   );
 
+  useEffect(() => {
+    async function fetchSecurityAlerts() {
+      if (!session?.accessToken || !repository) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const baseUrl = repository.provider === 'github'
+          ? `https://api.github.com/repos/${repository.full_name}/security/alerts`
+          : `https://gitlab.com/api/v4/projects/${repository.id}/vulnerability_findings`;
+
+        const response = await fetch(baseUrl, {
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+            'Accept': repository.provider === 'github'
+              ? 'application/vnd.github.v3+json'
+              : 'application/json',
+          },
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch security alerts');
+
+        const data = await response.json();
+        setAlerts(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error fetching security alerts');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSecurityAlerts();
+  }, [repository, session]);
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return 'text-red-400 bg-red-500/10';
+      case 'high':
+        return 'text-orange-400 bg-orange-500/10';
+      case 'moderate':
+        return 'text-yellow-400 bg-yellow-500/10';
+      case 'low':
+        return 'text-blue-400 bg-blue-500/10';
+      default:
+        return 'text-gray-400 bg-gray-500/10';
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold flex items-center gap-3 text-blue-400">
-            <ShieldAlert className="h-6 w-6" />
-            Analizando repositorio...
-          </h2>
-          <button
-            onClick={handleStop}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            Detener
-          </button>
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+          <span className="ml-2 text-gray-400">Scanning repository...</span>
         </div>
-        <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
-          <div className="flex flex-col gap-2">
-            <div className="h-4 bg-gray-700 rounded w-3/4 animate-pulse" />
-            <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
-          </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
+        <div className="p-4 bg-red-500/10 text-red-400 rounded-lg flex items-center">
+          <Shield className="h-5 w-5 mr-2" />
+          {error}
         </div>
       </div>
     );
@@ -286,43 +349,95 @@ export default function SecurityAnalysis({
 
   return (
     <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold flex items-center gap-3 text-blue-400">
-          <ShieldAlert className="h-6 w-6" />
-          Análisis de seguridad - {repoData.selectedRepo || "Sin repositorio"}
-        </h2>
-        {!loading && !securityAnalysis && (
-          <button
-            onClick={performAnalysis}
-            disabled={!repoData.selectedRepo}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Iniciar análisis
-          </button>
-        )}
-      </div>
+      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
+        <Shield className="h-6 w-6" />
+        Security Overview
+      </h2>
 
-      {securityAnalysis ? (
-        <div ref={analysisContainerRef} className="space-y-4">
-          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-            <div className="prose prose-invert max-w-none">
-              {renderMarkdown(securityAnalysis)}
+      <div className="space-y-6">
+        {/* Security Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-[#0d1117] rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Critical</span>
+              <AlertTriangle className="h-5 w-5 text-red-400" />
             </div>
+            <span className="text-2xl font-bold text-gray-200">
+              {alerts.filter(a => a.severity === 'critical').length}
+            </span>
           </div>
-          <button
-            onClick={performAnalysis}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            Actualizar análisis
-          </button>
+          <div className="p-4 bg-[#0d1117] rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">High</span>
+              <AlertTriangle className="h-5 w-5 text-orange-400" />
+            </div>
+            <span className="text-2xl font-bold text-gray-200">
+              {alerts.filter(a => a.severity === 'high').length}
+            </span>
+          </div>
+          <div className="p-4 bg-[#0d1117] rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Moderate</span>
+              <AlertTriangle className="h-5 w-5 text-yellow-400" />
+            </div>
+            <span className="text-2xl font-bold text-gray-200">
+              {alerts.filter(a => a.severity === 'moderate').length}
+            </span>
+          </div>
         </div>
-      ) : (
-        <p className="text-gray-400 italic">
-          {repoData.selectedRepo
-            ? "Haz clic en 'Iniciar análisis' para comenzar"
-            : "Selecciona un repositorio para comenzar el análisis"}
-        </p>
-      )}
+
+        {/* Alerts List */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-200">Security Alerts</h3>
+          {alerts.length === 0 ? (
+            <div className="p-4 bg-[#0d1117] rounded-lg text-center text-gray-400">
+              No security alerts found
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          getSeverityColor(alert.severity)
+                        }`}>
+                          {alert.severity}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          alert.state === 'fixed' 
+                            ? 'text-green-400 bg-green-500/10' 
+                            : 'text-red-400 bg-red-500/10'
+                        }`}>
+                          {alert.state}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-medium text-gray-200 mb-1">
+                        {alert.title}
+                      </h4>
+                      <p className="text-sm text-gray-400">
+                        {alert.description}
+                      </p>
+                      <div className="mt-2 text-xs text-gray-500">
+                        Affected package: {alert.affected_package}
+                      </div>
+                    </div>
+                    {alert.state === 'fixed' ? (
+                      <CheckCircle className="h-5 w-5 text-green-400 ml-4" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-400 ml-4" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
