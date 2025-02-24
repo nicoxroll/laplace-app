@@ -1,9 +1,30 @@
 // components/pull-requests-section.tsx
 "use client";
 
+import { Octokit } from "@octokit/rest";
 import { GitPullRequest, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+// Add rate limiting constants
+const RETRY_DELAY = 1000;
+const MAX_RETRIES = 3;
+
+// Add the retry utility function
+const fetchWithRetry = async (
+  fn: () => Promise<any>,
+  retries = MAX_RETRIES
+) => {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries > 0 && error.status === 500) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+      return fetchWithRetry(fn, retries - 1);
+    }
+    throw error;
+  }
+};
 
 interface PullRequest {
   id: number;
@@ -30,6 +51,82 @@ export function PullRequestsSection({
   const [searchTerm, setSearchTerm] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
 
+  // Create Octokit instance with rate limiting
+  const octokit = useCallback(() => {
+    return new Octokit({
+      auth: session?.accessToken,
+      throttle: {
+        onRateLimit: (
+          retryAfter: number,
+          options: any,
+          octokit: Octokit,
+          retryCount: number
+        ): boolean => {
+          if (retryCount < 2) {
+            console.warn(
+              `Rate limit exceeded, retrying after ${retryAfter} seconds`
+            );
+            return true;
+          }
+          return false;
+        },
+        onSecondaryRateLimit: (
+          retryAfter: number,
+          options: any,
+          octokit: Octokit,
+          retryCount: number
+        ): boolean => {
+          if (retryCount < 2) return true;
+          return false;
+        },
+      },
+    });
+  }, [session?.accessToken]);
+
+  const fetchPullRequests = useCallback(async () => {
+    if (!selectedRepo || !session?.accessToken) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      const [owner, repo] = selectedRepo.split("/");
+
+      const github = octokit();
+
+      const { data } = await fetchWithRetry(async () => {
+        return github.pulls.list({
+          owner,
+          repo,
+          state: "all",
+          per_page: 100,
+          headers: {
+            "If-None-Match": "", // Bypass cache
+          },
+        });
+      });
+
+      setPullRequests(data);
+    } catch (err: any) {
+      console.error("Error fetching pull requests:", err);
+      setError(
+        err.status === 403
+          ? "Rate limit exceeded. Please wait a few minutes and try again."
+          : err.message || "Error desconocido"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRepo, session?.accessToken, octokit]);
+
+  useEffect(() => {
+    // Debounce the fetch to prevent too many requests
+    const timeoutId = setTimeout(() => {
+      fetchPullRequests();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [fetchPullRequests]);
+
   const filteredPRs = pullRequests.filter((pr) => {
     const matchesSearch = pr.title
       .toLowerCase()
@@ -37,36 +134,6 @@ export function PullRequestsSection({
     const matchesState = stateFilter === "all" || pr.state === stateFilter;
     return matchesSearch && matchesState;
   });
-
-  useEffect(() => {
-    const fetchPullRequests = async () => {
-      if (!selectedRepo || !session?.accessToken) return;
-
-      try {
-        setLoading(true);
-        const [owner, repo] = selectedRepo.split("/");
-        const response = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/pulls?state=all`,
-          {
-            headers: {
-              Authorization: `Bearer ${session.accessToken}`,
-              Accept: "application/vnd.github+json",
-            },
-          }
-        );
-
-        if (!response.ok) throw new Error("Error fetching pull requests");
-        const data = await response.json();
-        setPullRequests(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error desconocido");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPullRequests();
-  }, [selectedRepo, session?.accessToken]);
 
   if (loading) {
     return (
