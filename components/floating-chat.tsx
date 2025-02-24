@@ -1,14 +1,6 @@
 "use client";
 import "/styles/globals.css";
 
-import { ChevronRight, Send, StopCircle } from "lucide-react";
-import Prism from "prismjs";
-import "prismjs/components/prism-css";
-import "prismjs/components/prism-java";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-typescript";
-import "prismjs/themes/prism-okaidia.css";
 import {
   FormEvent,
   MouseEvent as ReactMouseEvent,
@@ -17,8 +9,16 @@ import {
   useRef,
   useState,
 } from "react";
+import { Bot, ChevronRight, Send, StopCircle, Maximize2, Minimize2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Prism from "prismjs";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-typescript";
+import "prismjs/themes/prism-okaidia.css";
 
 interface RepoItem {
   name: string;
@@ -419,5 +419,247 @@ ${formatStructure(repoData.repoStructure)}
         </form>
       </div>
     </aside>
+  );
+}
+
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface FloatingChatProps {
+  apiUrl: string;
+  repoData: {
+    selectedRepo: string | null;
+    currentPath: string;
+    fileContent: string[];
+    repoStructure: RepoItem[];
+  };
+  githubToken: string;
+  fileName?: string;
+}
+
+export function FloatingChat({ apiUrl, repoData, githubToken, fileName }: FloatingChatProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+
+  const getRepoContext = useCallback(() => {
+    const context = [];
+    
+    if (repoData.selectedRepo) {
+      context.push(`Repository: ${repoData.selectedRepo}`);
+    }
+    
+    if (repoData.currentPath) {
+      context.push(`Current path: ${repoData.currentPath}`);
+    }
+    
+    if (fileName) {
+      context.push(`Current file: ${fileName}`);
+    }
+
+    if (repoData.fileContent.length > 0) {
+      context.push('File content:', ...repoData.fileContent);
+    }
+
+    return context.join('\n');
+  }, [repoData, fileName]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const newMessage: Message = { role: 'user', content: input };
+    setMessages(prev => [...prev, newMessage]);
+    setInput('');
+    setLoading(true);
+
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    try {
+      const context = getRepoContext();
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${githubToken}`,
+        },
+        body: JSON.stringify({
+          messages: [...messages, newMessage],
+          context,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Response cancelled.' }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Error: Failed to get response.' }]);
+      }
+    } finally {
+      setLoading(false);
+      setAbortController(null);
+      chatContainerRef.current?.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const handleStop = () => {
+    if (abortController) {
+      abortController.abort();
+      setLoading(false);
+      setAbortController(null);
+    }
+  };
+
+  const renderMarkdown = useCallback((content: string) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        code({ node, inline, className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || '');
+          return !inline && match ? (
+            <pre className="bg-[#0d1117] p-2 rounded overflow-x-auto">
+              <code className={className} {...props}>
+                {children}
+              </code>
+            </pre>
+          ) : (
+            <code className={`bg-[#1c2128] px-1 py-0.5 rounded ${className}`} {...props}>
+              {children}
+            </code>
+          );
+        },
+        pre({ children }) {
+          return <div className="mb-4">{children}</div>;
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  ), []);
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fixed bottom-4 right-4 p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all duration-300 z-50 ${
+          isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        <Bot className="h-6 w-6" />
+      </button>
+
+      <div
+        className={`fixed bottom-4 right-4 z-50 ${
+          isOpen ? 'flex' : 'hidden'
+        } flex-col ${
+          isExpanded 
+            ? 'w-[800px] h-[600px]' 
+            : 'w-[380px] h-[500px]'
+        } bg-[#0d1117] rounded-lg border border-[#30363d] shadow-xl transition-all duration-300`}
+      >
+        {/* Chat Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#30363d]">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-blue-400" />
+            <span className="text-sm font-medium text-gray-200">AI Assistant</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1.5 hover:bg-[#1c2128] rounded-lg transition-colors"
+            >
+              {isExpanded ? (
+                <Minimize2 className="h-4 w-4 text-gray-400" />
+              ) : (
+                <Maximize2 className="h-4 w-4 text-gray-400" />
+              )}
+            </button>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="p-1.5 hover:bg-[#1c2128] rounded-lg transition-colors"
+            >
+              <X className="h-4 w-4 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Chat Messages */}
+        <div
+          ref={chatContainerRef}
+          className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] p-4"
+        >
+          {messages
+            .filter(msg => msg.role !== "system")
+            .map((msg, i) => (
+              <div
+                key={i}
+                className={`p-3 mb-3 rounded-lg ${
+                  msg.role === "user"
+                    ? "bg-[#1f6feb] ml-6"
+                    : "bg-[#161b22] mr-6"
+                }`}
+              >
+                {msg.role === "assistant" && repoData.selectedRepo && (
+                  <div className="text-xs text-gray-400 mb-2">
+                    Context: {repoData.selectedRepo}
+                  </div>
+                )}
+                <div className="text-sm prose prose-invert">
+                  {renderMarkdown(msg.content)}
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* Chat Input */}
+        <form onSubmit={handleSubmit} className="p-4 border-t border-[#30363d]">
+          <div className="relative">
+            {loading ? (
+              <div className="w-full pl-3 pr-8 py-2 bg-[#161b22] rounded-lg text-sm text-[#8b949e] flex items-center">
+                <div className="dot-flashing mr-2"></div>
+                Thinking...
+              </div>
+            ) : (
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="w-full pl-3 pr-8 py-2 bg-[#161b22] border border-[#30363d] rounded-lg text-sm text-[#c9d1d9] focus:ring-2 focus:ring-[#1f6feb] focus:outline-none"
+                placeholder="Ask something..."
+                disabled={loading}
+              />
+            )}
+            <button
+              type="button"
+              onClick={loading ? handleStop : handleSubmit}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#58a6ff] disabled:opacity-50"
+              disabled={!input.trim() && !loading}
+            >
+              {loading ? (
+                <StopCircle className="h-4 w-4" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }

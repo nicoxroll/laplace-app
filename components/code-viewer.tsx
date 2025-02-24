@@ -1,200 +1,201 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Check, Copy, Download, Maximize, Minimize } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { File, Folder, ChevronRight, ChevronDown, Loader2, Bot } from 'lucide-react';
+import type { CodeViewerProps, FileNode } from '../types/code-viewer';
 
-interface CodeViewerProps {
-  content: string[];
-  fileName?: string;
-  filePath?: string;
-  imageSrc?: string;
-  githubToken?: string;
-}
+export function CodeViewer({ repository }: CodeViewerProps) {
+  const { data: session } = useSession();
+  const [files, setFiles] = useState<FileNode[]>([]);
+  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
-export function CodeViewer({
-  content,
-  fileName = "",
-  filePath = "",
-  imageSrc = "",
-  githubToken = "",
-}: CodeViewerProps) {
-  const [copied, setCopied] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  useEffect(() => {
+    const fetchContent = async () => {
+      if (!session?.accessToken || !repository) return;
 
-  const isImage = [".jpg", ".jpeg", ".png", ".gif"].some((ext) =>
-    fileName.toLowerCase().endsWith(ext)
-  );
+      setLoading(true);
+      setError(null);
+      setSelectedFile(null);
 
-  const getImageUrl = () => {
-    if (!imageSrc) return "";
-    let url = imageSrc;
+      try {
+        const baseUrl = repository.provider === 'github' 
+          ? `https://api.github.com/repos/${repository.full_name}/contents`
+          : `https://gitlab.com/api/v4/projects/${repository.id}/repository/tree`;
 
-    if (githubToken) {
-      url += url.includes("?") ? "&" : "?";
-      url += `access_token=${githubToken}`;
-    }
+        const response = await fetch(baseUrl, {
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+            'Accept': repository.provider === 'github' 
+              ? 'application/vnd.github+json'
+              : 'application/json',
+          },
+        });
 
-    return url;
+        if (!response.ok) {
+          throw new Error('Failed to fetch repository content');
+        }
+
+        const data = await response.json();
+        setFiles(processFiles(data));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error fetching content');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, [repository, session]);
+
+  const processFiles = (data: any[]): FileNode[] => {
+    return data
+      .sort((a, b) => {
+        // Directories first, then files
+        if (a.type === b.type) return a.name.localeCompare(b.name);
+        return a.type === 'dir' ? -1 : 1;
+      })
+      .map(item => ({
+        name: item.name,
+        path: item.path,
+        type: item.type === 'dir' ? 'directory' : 'file',
+        ...(item.type === 'dir' && { children: [] })
+      }));
   };
 
-  const handleCopy = () => {
-    if (isImage) {
-      fetch(getImageUrl())
-        .then((res) => res.blob())
-        .then((blob) => {
-          navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-          setCopied(true);
-        })
-        .catch(() => setHasError(true));
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleFileSelect = async (file: FileNode) => {
+    if (file.type === 'file') {
+      setSelectedFile(file);
+      if (!file.content) {
+        try {
+          const response = await fetch(
+            repository.provider === 'github'
+              ? `https://api.github.com/repos/${repository.full_name}/contents/${file.path}`
+              : `https://gitlab.com/api/v4/projects/${repository.id}/repository/files/${encodeURIComponent(file.path)}/raw`,
+            {
+              headers: {
+                'Authorization': `Bearer ${session?.accessToken}`,
+                'Accept': repository.provider === 'github'
+                  ? 'application/vnd.github+json'
+                  : 'application/json',
+              },
+            }
+          );
+
+          if (!response.ok) throw new Error('Failed to fetch file content');
+
+          const content = await response.text();
+          file.content = content;
+          setSelectedFile({ ...file });
+        } catch (err) {
+          setError('Failed to load file content');
+        }
+      }
     } else {
-      navigator.clipboard.writeText(content.join("\n"));
-      setCopied(true);
+      toggleFolder(file.path);
     }
-    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownload = () => {
-    const link = document.createElement("a");
-    link.download = fileName;
-
-    if (isImage) {
-      link.href = getImageUrl();
-    } else {
-      const blob = new Blob([content.join("\n")], { type: "text/plain" });
-      link.href = URL.createObjectURL(blob);
-    }
-
-    link.click();
-    URL.revokeObjectURL(link.href);
+  const renderTree = (nodes: FileNode[], level = 0) => {
+    return nodes.map((node) => (
+      <div key={node.path} style={{ paddingLeft: `${level * 16}px` }}>
+        <button
+          onClick={() => handleFileSelect(node)}
+          className={`w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#1c2128] rounded text-sm group ${
+            selectedFile?.path === node.path ? 'bg-[#1c2128]' : ''
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {node.type === 'directory' && (
+              expandedFolders.has(node.path)
+                ? <ChevronDown className="h-4 w-4 text-gray-400" />
+                : <ChevronRight className="h-4 w-4 text-gray-400" />
+            )}
+            {node.type === 'directory'
+              ? <Folder className="h-4 w-4 text-blue-400" />
+              : <File className="h-4 w-4 text-gray-400" />
+            }
+            <span className="text-gray-300 truncate">{node.name}</span>
+          </div>
+        </button>
+        {node.type === 'directory' &&
+         expandedFolders.has(node.path) &&
+         node.children &&
+         renderTree(node.children, level + 1)}
+      </div>
+    ));
   };
 
-  return (
-    <div
-      className={`rounded-md border border-[#30363d] overflow-hidden ${
-        isFullscreen
-          ? "fixed inset-0 z-50 !rounded-none bg-[#0d1117]"
-          : "relative max-w-full"
-      }`}
-    >
-      <div className="flex items-center justify-between px-4 py-2 bg-[#161b22] border-b border-[#30363d]">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-300">
-            {isImage ? (
-              <div className="flex flex-col">
-                <span className="text-xs text-gray-400">{filePath}</span>
-                <span>{fileName}</span>
-              </div>
-            ) : (
-              `${filePath}/${fileName} · ${content.length} lines · ${
-                content.join("").length
-              } Bytes`
-            )}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 hover:bg-[#30363d] text-gray-300"
-            onClick={() => setIsFullscreen(!isFullscreen)}
-          >
-            {isFullscreen ? (
-              <Minimize className="h-4 w-4" />
-            ) : (
-              <Maximize className="h-4 w-4" />
-            )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 hover:bg-[#30363d] text-gray-300"
-            onClick={handleCopy}
-            disabled={hasError}
-          >
-            {copied ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 hover:bg-[#30363d] text-gray-300"
-            onClick={handleDownload}
-            disabled={hasError}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+  if (loading) {
+    return (
+      <div className="bg-[#161b22] rounded-lg shadow-xl p-6 min-h-[400px] flex items-center justify-center">
+        <div className="flex items-center gap-3 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading repository content...</span>
         </div>
       </div>
+    );
+  }
 
-      {isImage ? (
-        <div className="relative h-full bg-black flex items-center justify-center min-h-[300px]">
-          <div className="absolute top-2 left-2 text-xs text-gray-400 bg-black/50 p-1 rounded">
-            {filePath}/{fileName}
-          </div>
+  if (error) {
+    return (
+      <div className="bg-[#161b22] rounded-lg shadow-xl p-6">
+        <div className="flex items-center gap-2 text-red-400 bg-red-500/10 p-4 rounded-lg">
+          <Bot className="h-5 w-5" />
+          <span>{error}</span>
+        </div>
+      </div>
+    );
+  }
 
-          {!isImageLoaded && !hasError && (
-            <div className="text-gray-400 animate-pulse">Loading image...</div>
-          )}
-
-          <img
-            src={getImageUrl()}
-            alt={`Preview de ${fileName}`}
-            className={`object-contain cursor-zoom-in ${
-              isFullscreen ? "max-h-[90vh] w-auto" : "max-h-96 max-w-full"
-            } ${!isImageLoaded || hasError ? "hidden" : "block"}`}
-            onLoad={() => {
-              setIsImageLoaded(true);
-              setHasError(false);
-            }}
-            onError={() => {
-              setHasError(true);
-              setIsImageLoaded(false);
-            }}
-          />
-
-          {hasError && (
-            <div className="text-red-400 text-center p-4">
-              Error loading image: <br />
-              <span className="text-xs break-all">{getImageUrl()}</span>
-              <button
-                className="text-blue-400 hover:underline block mt-2"
-                onClick={() => {
-                  setHasError(false);
-                  setIsImageLoaded(false);
-                }}
-              >
-                Try again
-              </button>
+  return (
+    <div className="bg-[#161b22] rounded-lg shadow-xl">
+      <div className="p-4 border-b border-[#30363d]">
+        <h2 className="text-lg font-semibold text-gray-200">
+          {repository.full_name}
+        </h2>
+      </div>
+      <div className="grid grid-cols-[300px_1fr]">
+        <div className="border-r border-[#30363d] p-2 max-h-[600px] overflow-y-auto">
+          {renderTree(files)}
+        </div>
+        <div className="p-4 max-h-[600px] overflow-y-auto">
+          {selectedFile ? (
+            selectedFile.content ? (
+              <pre className="p-4 bg-[#0d1117] rounded-lg overflow-x-auto">
+                <code className="text-sm text-gray-300 font-mono">
+                  {selectedFile.content}
+                </code>
+              </pre>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                Loading file content...
+              </div>
+            )
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-400">
+              Select a file to view its content
             </div>
           )}
         </div>
-      ) : (
-        <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full border-collapse">
-            <tbody className="font-mono text-sm">
-              {content.map((line, index) => (
-                <tr key={index} className="hover:bg-[#1c2128] group">
-                  <td className="py-[1px] pl-4 pr-2 select-none text-right text-gray-500 w-12 border-r border-[#30363d] sticky left-0 bg-[#0d1117]">
-                    {index + 1}
-                  </td>
-                  <td className="py-[1px] pl-4 pr-4 whitespace-pre-wrap break-all text-[#7ee787]">
-                    {line}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
+

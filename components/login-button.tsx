@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Github } from "lucide-react";
+import { Github, Gitlab } from "lucide-react";
 import { signIn, signOut, useSession } from "next-auth/react";
 
 export function LoginButton() {
@@ -20,13 +20,22 @@ export function LoginButton() {
   }
 
   return (
-    <Button
-      onClick={() => signIn("github")}
-      variant="ghost"
-      className="text-gray-300 hover:bg-[#30363d] gap-2"
-    >
-      <Github className="h-4 w-4" />
-      Sign in with GitHub
-    </Button>
+    <div className="flex gap-4">
+      <button
+        onClick={() => signIn("github")}
+        className="flex items-center gap-2 px-4 py-2 bg-[#24292e] hover:bg-[#1c2126] text-white rounded-lg transition-colors"
+      >
+        <Github className="h-5 w-5" />
+        Sign in with GitHub
+      </button>
+      
+      <button
+        onClick={() => signIn("gitlab")}
+        className="flex items-center gap-2 px-4 py-2 bg-[#fc6d26] hover:bg-[#e24329] text-white rounded-lg transition-colors"
+      >
+        <Gitlab className="h-5 w-5" />
+        Sign in with GitLab
+      </button>
+    </div>
   );
 }
