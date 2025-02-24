@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Check, Copy, Download, Maximize, Minimize } from "lucide-react";
 import { useState } from "react";
+import DOMPurify from "dompurify";
 
 interface CodeViewerProps {
   content: string[];
@@ -37,7 +38,7 @@ export function CodeViewer({
       url += `access_token=${githubToken}`;
     }
 
-    return url;
+    return DOMPurify.sanitize(url);
   };
 
   const handleCopy = () => {
