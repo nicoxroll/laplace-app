@@ -1,7 +1,8 @@
 "use client";
 
-import { CodeViewer } from "./code-viewer";
+import { SectionCard } from "@/components/ui/section-card";
 import type { Repository } from "@/types/repository";
+import { CodeViewer } from "./code-viewer";
 
 interface CodeSectionProps {
   repository: Repository;
@@ -9,10 +10,10 @@ interface CodeSectionProps {
 
 export function CodeSection({ repository }: CodeSectionProps) {
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="bg-[#161b22] rounded-lg border border-[#30363d] h-[calc(100vh-8rem)]">
+    <SectionCard>
+      <div className="h-[calc(100vh-12rem)]">
         <CodeViewer />
       </div>
-    </div>
+    </SectionCard>
   );
 }

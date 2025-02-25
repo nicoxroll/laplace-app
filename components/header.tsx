@@ -1,25 +1,25 @@
 "use client";
 
-import { useCallback, useState, useRef, useEffect } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
-import Image from "next/image";
-import { RepositoryList } from "@/components/repository-list";
-import { CodeSection } from "@/components/code-viewer";
+import { AgentsSection } from "@/components/agents-section";
+import { CodeSection } from "@/components/code-section";
+import { InsightsSection } from "@/components/insights-section";
 import { IssuesSection } from "@/components/issues-section";
+import { PullRequestsSection } from "@/components/pull-requests-section";
+import { RepositoryList } from "@/components/repository-list";
+import { SecuritySection } from "@/components/security-section";
 import type { Repository } from "@/types/repository";
 import {
-  Code,
-  CircleDot,
-  GitPullRequest,
-  Shield,
-  LineChart,
   Bot,
   ChevronDown,
+  CircleDot,
+  Code,
+  GitPullRequest,
+  LineChart,
+  Shield,
 } from "lucide-react";
-import { PullRequestsSection } from "@/components/pull-requests-section";
-import { SecuritySection } from "@/components/security-section";
-import { InsightsSection } from "@/components/insights-section";
-import { AgentsSection } from "@/components/agents-section";
+import { signOut, useSession } from "next-auth/react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 
 interface HeaderProps {
   activeSection: string;

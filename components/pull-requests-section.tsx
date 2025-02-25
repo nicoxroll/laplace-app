@@ -1,10 +1,11 @@
 // components/pull-requests-section.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { GitPullRequest, Search, Loader2, AlertCircle } from "lucide-react";
+import { SectionCard } from "@/components/ui/section-card";
 import type { Repository } from "@/types/repository";
+import { AlertCircle, GitPullRequest, Search } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 interface PullRequest {
   id: number;
@@ -108,11 +109,7 @@ export function PullRequestsSection({
 
   if (loading) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-          <GitPullRequest className="h-6 w-6" />
-          Cargando Pull Requests...
-        </h2>
+      <SectionCard icon={GitPullRequest} title="Cargando Pull Requests...">
         <div className="space-y-4">
           <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
             <div className="flex flex-col gap-2">
@@ -121,127 +118,119 @@ export function PullRequestsSection({
             </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-red-400">
-          <GitPullRequest className="h-6 w-6" />
-          Error al cargar PRs
-        </h2>
-        <div className="space-y-4">
-          <p className="text-red-300 font-mono text-sm">{error}</p>
-        </div>
-      </div>
+      <SectionCard
+        icon={AlertCircle}
+        title="Error al cargar PRs"
+        className="border-red-500/20"
+      >
+        <p className="text-red-300 font-mono text-sm">{error}</p>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="p-6 bg-[#161b22] rounded-lg">
-      <h2 className="text-xl font-semibold mb-4">Pull Requests</h2>
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-          <GitPullRequest className="h-6 w-6" />
-          Pull Requests -{" "}
-          {repository.full_name || "Sin repositorio seleccionado"}
-        </h2>
-
-        <div className="space-y-4">
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder="Buscar PRs..."
-                className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
-            </div>
+    <SectionCard
+      icon={GitPullRequest}
+      title={`Pull Requests - ${repository.full_name}`}
+    >
+      <div className="space-y-4">
+        <div className="flex gap-4 mb-6">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Buscar PRs..."
+              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
           </div>
-
-          {filteredPRs.length === 0 ? (
-            <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-              <p className="text-gray-400">No se encontraron pull requests</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-[#30363d]">
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">
-                      Número
-                    </th>
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">
-                      Título
-                    </th>
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">
-                      Autor
-                    </th>
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">
-                      Estado
-                    </th>
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">
-                      Fecha
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPRs.map((pr) => (
-                    <tr
-                      key={pr.id}
-                      className="border-b border-[#30363d] hover:bg-[#0d1117]"
-                    >
-                      <td className="px-4 py-3 text-sm text-gray-300">
-                        #{pr.number}
-                      </td>
-                      <td className="px-4 py-3">
-                        <a
-                          href={pr.html_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:underline"
-                        >
-                          {pr.title}
-                        </a>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={pr.user.avatar_url}
-                            alt={pr.user.login}
-                            className="w-6 h-6 rounded-full"
-                          />
-                          <span className="text-gray-300">{pr.user.login}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            pr.state === "open"
-                              ? "bg-green-500/20 text-green-400"
-                              : pr.state === "closed"
-                              ? "bg-red-500/20 text-red-400"
-                              : "bg-gray-500/20 text-gray-400"
-                          }`}
-                        >
-                          {pr.state}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">
-                        {new Date(pr.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
+
+        {filteredPRs.length === 0 ? (
+          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+            <p className="text-gray-400">No se encontraron pull requests</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[#30363d]">
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Número
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Título
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Autor
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Fecha
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPRs.map((pr) => (
+                  <tr
+                    key={pr.id}
+                    className="border-b border-[#30363d] hover:bg-[#0d1117]"
+                  >
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      #{pr.number}
+                    </td>
+                    <td className="px-4 py-3">
+                      <a
+                        href={pr.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline"
+                      >
+                        {pr.title}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={pr.user.avatar_url}
+                          alt={pr.user.login}
+                          className="w-6 h-6 rounded-full"
+                        />
+                        <span className="text-gray-300">{pr.user.login}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          pr.state === "open"
+                            ? "bg-green-500/20 text-green-400"
+                            : pr.state === "closed"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-gray-500/20 text-gray-400"
+                        }`}
+                      >
+                        {pr.state}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400">
+                      {new Date(pr.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </div>
+    </SectionCard>
   );
 }

@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
-import {
-  ChevronRight,
-  ChevronDown,
-  File,
-  Folder,
-  ArrowLeft,
-} from "lucide-react";
 import { useRepository } from "@/contexts/repository-context";
 import { Octokit } from "@octokit/rest";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  File,
+  Folder,
+  Search,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 interface TreeItem {
   name: string;
@@ -28,6 +29,7 @@ export function FileTree() {
   );
   const [loading, setLoading] = useState(false);
   const [currentFolder, setCurrentFolder] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchContents = async (path: string = "") => {
     if (!session?.user?.accessToken || !selectedRepo) return;
@@ -109,56 +111,84 @@ export function FileTree() {
     }
   };
 
-  return (
-    <div className="p-2">
-      {/* Back button */}
-      {currentFolder && (
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-2 w-full px-2 py-2 mb-2 hover:bg-[#1c2128] rounded-md text-gray-400 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>
-            Back to {currentFolder.split("/").slice(0, -1).pop() || "root"}
-          </span>
-        </button>
-      )}
+  const filteredTree = tree.filter((item) =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-      {/* Tree items */}
-      {loading ? (
-        <div className="flex justify-center p-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" />
+  return (
+    <div className="flex flex-col h-full">
+      {/* Search bar */}
+      <div className="p-2 border-b border-[#30363d]">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search files..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-8 pr-4 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-md text-sm text-gray-300 focus:outline-none focus:border-[#58a6ff] focus:ring-1 focus:ring-[#58a6ff]"
+          />
+          <Search className="h-4 w-4 text-gray-500 absolute left-2 top-2" />
         </div>
-      ) : (
-        <div className="space-y-0.5">
-          {tree.map((item) => (
+      </div>
+
+      {/* Tree content with custom scrollbar */}
+      <div className="flex-1 overflow-auto scrollbar-custom">
+        <div className="p-2">
+          {/* Back button */}
+          {currentFolder && (
             <button
-              key={item.path}
-              onClick={() => handleItemClick(item)}
-              className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-[#1c2128] rounded-md text-left text-sm group"
+              onClick={handleBack}
+              className="flex items-center gap-2 w-full px-2 py-2 mb-2 hover:bg-[#1c2128] rounded-md text-gray-400 text-sm"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                {item.type === "dir" ? (
-                  <>
-                    {expandedFolders.has(item.path) ? (
-                      <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
-                    )}
-                    <Folder className="h-4 w-4 text-gray-400 shrink-0" />
-                  </>
-                ) : (
-                  <>
-                    <span className="w-4" />
-                    <File className="h-4 w-4 text-gray-400 shrink-0" />
-                  </>
-                )}
-                <span className="text-gray-300 truncate">{item.name}</span>
-              </div>
+              <ArrowLeft className="h-4 w-4" />
+              <span>
+                Back to {currentFolder.split("/").slice(0, -1).pop() || "root"}
+              </span>
             </button>
-          ))}
+          )}
+
+          {/* Tree items */}
+          {loading ? (
+            <div className="flex justify-center p-4">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" />
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredTree.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => handleItemClick(item)}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-[#1c2128] rounded-md text-left text-sm group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {item.type === "dir" ? (
+                      <>
+                        {expandedFolders.has(item.path) ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                        )}
+                        <Folder className="h-4 w-4 text-gray-400 shrink-0" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-4" />
+                        <File className="h-4 w-4 text-gray-400 shrink-0" />
+                      </>
+                    )}
+                    <span className="text-gray-300 truncate">{item.name}</span>
+                  </div>
+                </button>
+              ))}
+              {filteredTree.length === 0 && searchTerm && (
+                <div className="text-center py-4 text-gray-400">
+                  No files found matching "{searchTerm}"
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

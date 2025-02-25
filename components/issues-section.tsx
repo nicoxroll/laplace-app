@@ -1,11 +1,12 @@
 // components/issues-section.tsx
 "use client";
 
+import { SectionCard } from "@/components/ui/section-card";
+import type { Repository } from "@/types/repository";
 import { Octokit } from "@octokit/rest";
 import { AlertCircle, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
-import type { Repository } from "../types/repository";
 
 interface Issue {
   id: number;
@@ -24,11 +25,7 @@ interface Issue {
   }>;
 }
 
-interface IssuesSectionProps {
-  repository: Repository;
-}
-
-export function IssuesSection({ repository }: IssuesSectionProps) {
+export function IssuesSection({ repository }: { repository: Repository }) {
   const { data: session, status } = useSession();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,11 +112,7 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
 
   if (loading) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-          <AlertCircle className="h-6 w-6" />
-          Cargando Issues...
-        </h2>
+      <SectionCard icon={AlertCircle} title="Cargando Issues...">
         <div className="space-y-4">
           <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
             <div className="flex flex-col gap-2">
@@ -128,31 +121,24 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
             </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-red-400">
-          <AlertCircle className="h-6 w-6" />
-          Error al cargar Issues
-        </h2>
-        <div className="space-y-4">
-          <p className="text-red-300 font-mono text-sm">{error}</p>
-        </div>
-      </div>
+      <SectionCard
+        icon={AlertCircle}
+        title="Error al cargar Issues"
+        className="border-red-500/20"
+      >
+        <p className="text-red-300 font-mono text-sm">{error}</p>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-        <AlertCircle className="h-6 w-6" />
-        Issues - {repository.full_name || "Sin repositorio seleccionado"}
-      </h2>
-
+    <SectionCard icon={AlertCircle} title={`Issues - ${repository.full_name}`}>
       <div className="space-y-4">
         <div className="flex gap-4 mb-6">
           <div className="relative flex-1">
@@ -247,6 +233,6 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
           </div>
         )}
       </div>
-    </div>
+    </SectionCard>
   );
 }

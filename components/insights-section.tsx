@@ -1,7 +1,15 @@
 "use client";
 
+import { SectionCard } from "@/components/ui/section-card";
 import { Repository } from "@/types/repository";
-import { AlertCircle, GitBranch, GitCommit, Star, Users } from "lucide-react";
+import {
+  AlertCircle,
+  GitBranch,
+  GitCommit,
+  LineChart,
+  Star,
+  Users,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
@@ -130,9 +138,12 @@ export function InsightsSection({ repository }: { repository: Repository }) {
   }
 
   return (
-    <div className="p-6 bg-[#161b22] rounded-lg">
-      <h2 className="text-xl font-semibold mb-4">Repository Insights</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <SectionCard
+      icon={LineChart}
+      title={`Repository Insights - ${repository.full_name}`}
+    >
+      {/* Insights content */}
+      <div className="space-y-6">
         <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
           <div className="flex items-center gap-2">
             <Star className="h-5 w-5 text-yellow-400" />
@@ -173,6 +184,6 @@ export function InsightsSection({ repository }: { repository: Repository }) {
           </p>
         </div>
       </div>
-    </div>
+    </SectionCard>
   );
 }

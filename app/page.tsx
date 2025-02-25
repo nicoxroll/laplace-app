@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Header } from "@/components/header";
-import { RepositoryList } from "@/components/repository-list";
+import { AgentsSection } from "@/components/agents-section";
 import { CodeSection } from "@/components/code-section";
+import { FloatingChat } from "@/components/floating-chat";
+import { Header } from "@/components/header";
+import { InsightsSection } from "@/components/insights-section";
 import { IssuesSection } from "@/components/issues-section";
 import { PullRequestsSection } from "@/components/pull-requests-section";
+import { RepositoryList } from "@/components/repository-list";
 import { SecuritySection } from "@/components/security-section";
-import { InsightsSection } from "@/components/insights-section";
-import { AgentsSection } from "@/components/agents-section";
 import { useRepository } from "@/contexts/repository-context";
-import { FloatingChat } from "@/components/floating-chat";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function HomePage() {
   const router = useRouter();
@@ -60,8 +60,12 @@ export default function HomePage() {
         onSectionChange={setActiveSection}
       />
       <div className="flex h-[calc(100vh-4rem)]">
-        <RepositoryList />
-        <main className="flex-1 overflow-hidden">{renderSection()}</main>
+        <div className="w-64 border-r border-[#30363d]">
+          <RepositoryList />
+        </div>
+        <main className="flex-1 p-6 overflow-auto">
+          <div className="max-w-6xl mx-auto">{renderSection()}</div>
+        </main>
         <FloatingChat />
       </div>
     </div>

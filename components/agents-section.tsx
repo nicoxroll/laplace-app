@@ -1,16 +1,12 @@
 "use client";
 
-import { Bot } from "lucide-react";
+import { SectionCard } from "@/components/ui/section-card";
 import type { Repository } from "@/types/repository";
+import { Bot } from "lucide-react";
 
 export function AgentsSection({ repository }: { repository: Repository }) {
   return (
-    <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-        <Bot className="h-6 w-6" />
-        AI Agents
-      </h2>
-
+    <SectionCard icon={Bot} title={`AI Agents - ${repository.full_name}`}>
       <div className="space-y-6">
         <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
           <h3 className="text-lg font-semibold text-gray-200 mb-4">
@@ -55,6 +51,6 @@ export function AgentsSection({ repository }: { repository: Repository }) {
           </div>
         </div>
       </div>
-    </div>
+    </SectionCard>
   );
 }
