@@ -1,139 +1,176 @@
 "use client";
 
-import { useCallback, useState, useRef, useEffect } from 'react';
-import { Bot, Code2, AlertCircle, GitPullRequest, Shield, LineChart, Bot as BotIcon } from 'lucide-react';
-import { useSession, signIn, signOut } from 'next-auth/react';
-import Image from 'next/image';
-import { RepositoryList } from '@/components/repository-list';
-import { CodeViewer } from '@/components/code-viewer';
-import { IssuesSection } from '@/components/issues-section';
-import type { Repository } from '@/types/repository';
+import { useCallback, useState, useRef, useEffect } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
+import Image from "next/image";
+import { RepositoryList } from "@/components/repository-list";
+import { CodeSection } from "@/components/code-viewer";
+import { IssuesSection } from "@/components/issues-section";
+import type { Repository } from "@/types/repository";
+import {
+  Code,
+  CircleDot,
+  GitPullRequest,
+  Shield,
+  LineChart,
+  Bot,
+  ChevronDown,
+} from "lucide-react";
+import { PullRequestsSection } from "@/components/pull-requests-section";
+import { SecuritySection } from "@/components/security-section";
+import { InsightsSection } from "@/components/insights-section";
+import { AgentsSection } from "@/components/agents-section";
 
 interface HeaderProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
 }
 
-const sections = [
-  { id: 'code', name: 'Code', icon: Code2 },
-  { id: 'issues', name: 'Issues', icon: AlertCircle },
-  { id: 'pull-requests', name: 'Pull Requests', icon: GitPullRequest },
-  { id: 'security', name: 'Security', icon: Shield },
-  { id: 'insights', name: 'Insights', icon: LineChart },
-  { id: 'agents', name: 'Agents', icon: BotIcon },
-];
-
 export function Header({ activeSection, onSectionChange }: HeaderProps) {
   const { data: session } = useSession();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleSignOut = useCallback(async () => {
-    await signOut({ callbackUrl: '/' });
-  }, []);
+  const sections = [
+    { id: "code", label: "Code", icon: Code },
+    { id: "issues", label: "Issues", icon: CircleDot },
+    { id: "pullRequests", label: "Pull Requests", icon: GitPullRequest },
+    { id: "security", label: "Security", icon: Shield },
+    { id: "insights", label: "Insights", icon: LineChart },
+    { id: "agents", label: "Agents", icon: Bot },
+  ];
 
-  // Handle clicking outside of dropdown
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsDropdownOpen(false);
       }
-    }
+    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
-    <div className="bg-[#0d1117] border-b border-[#30363d]">
-      <div className="max-w-7xl mx-auto">
-        {/* Top header with logo and user info */}
-        <div className="px-4 py-3 flex items-center justify-between border-b border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <Bot className="h-8 w-8 text-blue-400" />
-            <span className="text-xl font-bold text-gray-200">Laplace</span>
+    <header className="h-16 bg-[#161b22] border-b border-[#30363d]">
+      <div className="h-full max-w-7xl mx-auto px-4 flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center gap-8">
+          <div className="text-xl font-bold text-white flex items-center gap-2">
+            <Bot className="h-6 w-6 text-blue-400" />
+            Laplace
           </div>
-          
-          <div className="flex items-center gap-4">
-            {session?.user && (
-              <div className="relative" ref={dropdownRef}>
-                <button 
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-3 hover:opacity-80 focus:outline-none"
-                >
-                  <div className="flex flex-col items-end">
-                    <span className="text-sm font-medium text-gray-200">
-                      {session.user.name}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {session.user.email}
-                    </span>
-                  </div>
-                  {session.user.image && (
-                    <img
-                      src={session.user.image}
-                      alt={session.user.name || ''}
-                      className="w-8 h-8 rounded-full ring-2 ring-[#30363d]"
-                    />
-                  )}
-                </button>
-                
-                {/* Dropdown menu */}
-                {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 py-2 w-48 bg-[#161b22] rounded-lg shadow-xl border border-[#30363d] z-50">
-                    <button
-                      onClick={handleSignOut}
-                      className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-[#1c2128] flex items-center gap-2"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Navigation sections */}
-        <div className="px-4">
-          <nav className="flex space-x-4 overflow-x-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-transparent">
+          {/* Navigation */}
+          <nav className="flex items-center gap-2">
             {sections.map((section) => {
               const Icon = section.icon;
               return (
                 <button
                   key={section.id}
                   onClick={() => onSectionChange(section.id)}
-                  className={`px-3 py-2 flex items-center gap-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
+                  className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-2 ${
                     activeSection === section.id
-                      ? 'text-blue-400 bg-[#1c2128]'
-                      : 'text-gray-400 hover:text-gray-300'
+                      ? "bg-[#1f6feb] text-white"
+                      : "text-gray-400 hover:text-gray-300"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  {section.name}
+                  {section.label}
                 </button>
               );
             })}
           </nav>
         </div>
+
+        {/* User Profile */}
+        {session?.user && (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 p-1 rounded-lg hover:bg-[#30363d] transition-colors"
+            >
+              {session.user.image ? (
+                <Image
+                  src={session.user.image}
+                  alt={session.user.name || "User avatar"}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                  {session.user.name?.[0] || "U"}
+                </div>
+              )}
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg py-1 z-50">
+                <div className="px-4 py-2 border-b border-[#30363d]">
+                  <p className="text-sm font-medium text-gray-200">
+                    {session.user.name}
+                  </p>
+                  <p className="text-xs text-gray-400">{session.user.email}</p>
+                </div>
+                <button
+                  onClick={() => signOut()}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#30363d]"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </header>
   );
 }
 
 export default function HomePage() {
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
-  const [activeSection, setActiveSection] = useState('code');
+  const [activeSection, setActiveSection] = useState("code");
 
   const renderSection = () => {
+    if (!selectedRepo) {
+      return (
+        <div className="flex items-center justify-center h-full text-gray-400">
+          <p>Select a repository to get started</p>
+        </div>
+      );
+    }
+
     switch (activeSection) {
-      case 'code':
-        return selectedRepo && <CodeViewer repository={selectedRepo} />;
-      case 'issues':
-        return selectedRepo && <IssuesSection repository={selectedRepo} />;
-      
+      case "code":
+        return <CodeSection repository={selectedRepo} />;
+
+      case "issues":
+        return <IssuesSection repository={selectedRepo} />;
+
+      case "pullRequests":
+        return <PullRequestsSection repository={selectedRepo} />;
+
+      case "security":
+        return <SecuritySection repository={selectedRepo} />;
+
+      case "insights":
+        return <InsightsSection repository={selectedRepo} />;
+
+      case "agents":
+        return <AgentsSection repository={selectedRepo} />;
+
       default:
-        return null;
+        return (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <p>Select a valid section</p>
+          </div>
+        );
     }
   };
 
@@ -150,11 +187,8 @@ export default function HomePage() {
             onSelect={setSelectedRepo}
           />
         </div>
-        <div className="w-2/3 overflow-auto">
-          {renderSection()}
-        </div>
+        <div className="w-2/3 overflow-auto">{renderSection()}</div>
       </div>
     </div>
   );
 }
-

@@ -1,127 +1,69 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
-import { Header } from '@/components/header';
-import { CodeViewer } from '@/components/code-viewer';
-import { IssuesSection } from '@/components/issues-section';
-import { PullRequestsSection } from '@/components/pull-requests-section';
-import { InsightsSection } from '@/components/insights-section';
-import { SecuritySection } from '@/components/security-section';
-import { AgentsSection } from '@/components/agents-section';
-import { RepositoryList } from '@/components/repository-list';
-import { FloatingChat } from '@/components/floating-chat';
-import { LoadingScreen } from '@/components/loading-screen';
-import type { Repository } from '@/types/repository';
-
-const NoRepoSelectedMessage = () => (
-  <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-    <div className="text-center text-gray-400">
-      Please select a repository to view this section
-    </div>
-  </div>
-);
+import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/header";
+import { RepositoryList } from "@/components/repository-list";
+import { CodeSection } from "@/components/code-section";
+import { IssuesSection } from "@/components/issues-section";
+import { PullRequestsSection } from "@/components/pull-requests-section";
+import { SecuritySection } from "@/components/security-section";
+import { InsightsSection } from "@/components/insights-section";
+import { AgentsSection } from "@/components/agents-section";
+import { useRepository } from "@/contexts/repository-context";
+import { FloatingChat } from "@/components/floating-chat";
 
 export default function HomePage() {
   const router = useRouter();
   const { data: session, status } = useSession({
     required: true,
     onUnauthenticated() {
-      router.push('/api/auth/signin');
+      router.push("/auth/signin");
     },
   });
-  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
-  const [activeSection, setActiveSection] = useState('code');
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (status === 'loading') {
-        console.log('Session loading is taking longer than expected...');
-      }
-    }, 3000);
-
-    return () => clearTimeout(timeoutId);
-  }, [status]);
+  const { selectedRepo } = useRepository();
+  const [activeSection, setActiveSection] = useState("code");
 
   const renderSection = () => {
+    if (!selectedRepo) {
+      return (
+        <div className="flex items-center justify-center h-full text-gray-400">
+          <p>Select a repository to get started</p>
+        </div>
+      );
+    }
+
     switch (activeSection) {
-      case 'code':
-        return selectedRepo ? (
-          <CodeViewer repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
-      case 'issues':
-        return selectedRepo ? (
-          <IssuesSection repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
-      case 'pull-requests':
-        return selectedRepo ? (
-          <PullRequestsSection repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
-      case 'security':
-        return selectedRepo ? (
-          <SecuritySection repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
-      case 'insights':
-        return selectedRepo ? (
-          <InsightsSection repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
-      case 'agents':
-        return <AgentsSection />;
+      case "code":
+        return <CodeSection repository={selectedRepo} />;
+      case "issues":
+        return <IssuesSection repository={selectedRepo} />;
+      case "pullRequests":
+        return <PullRequestsSection repository={selectedRepo} />;
+      case "security":
+        return <SecuritySection repository={selectedRepo} />;
+      case "insights":
+        return <InsightsSection repository={selectedRepo} />;
+      case "agents":
+        return <AgentsSection repository={selectedRepo} />;
       default:
-        return selectedRepo ? (
-          <CodeViewer repository={selectedRepo} />
-        ) : (
-          <NoRepoSelectedMessage />
-        );
+        return null;
     }
   };
 
-  if (status === 'loading') {
-    return <LoadingScreen />;
-  }
-
   return (
-    <div className="flex flex-col h-screen bg-[#0d1117]">
-      <Header 
+    <div className="min-h-screen bg-[#0d1117]">
+      <Header
         activeSection={activeSection}
         onSectionChange={setActiveSection}
       />
-      
-      <div className="flex gap-4 p-4 flex-1 overflow-hidden">
-        <div className="w-1/3 overflow-auto">
-          <RepositoryList 
-            onSelect={setSelectedRepo}
-            selectedRepo={selectedRepo}
-          />
-        </div>
-        <div className="w-2/3 overflow-auto">
-          {renderSection()}
-        </div>
+      <div className="flex h-[calc(100vh-4rem)]">
+        <RepositoryList />
+        <main className="flex-1 overflow-hidden">{renderSection()}</main>
+        <FloatingChat />
       </div>
-
-      {session?.user && (
-        <FloatingChat
-          apiUrl={process.env.NEXT_PUBLIC_API_URL || ''}
-          repoData={{
-            selectedRepo: selectedRepo?.full_name || null,
-            currentPath: '',
-            fileContent: [],
-            repoStructure: [],
-          }}
-          githubToken={session.accessToken || ''}
-        />
-      )}
     </div>
   );
 }

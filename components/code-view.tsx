@@ -263,155 +263,108 @@ export default function Component() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-300">
-      <Header
-        session={session}
-        activeSection={activeSection}
-        onSectionChange={setActiveSection}
+    <div className="flex h-screen">
+      <RepositoryList
+        onSelect={(repo) => handleRepoSelect(repo)}
+        selectedRepo={selectedRepo}
       />
 
-      <div className="flex">
-        {session?.user && (
-          <aside
-            className={`fixed left-0 top-[6.5rem] h-[calc(100vh-6.5rem)] w-64 transform ${
-              isSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%-3rem)]"
-            } transition-transform duration-300 z-40 bg-[#0d1117] border-r border-[#30363d]`}
-          >
-            <div className="p-4 h-full flex flex-col">
-              <button
-                onClick={toggleSidebar}
-                className={`absolute -right-5 top-1/2 -translate-y-1/2 bg-[#161b22] p-2 rounded-full border border-[#30363d] hover:bg-[#30363d] z-50 ${
-                  isSidebarOpen ? "" : "rotate-180"
-                }`}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+      <main className="flex-1 overflow-hidden">
+        {!session?.user ? (
+          <div className="flex flex-col items-center justify-center h-full">
+            <h1 className="text-2xl font-bold mb-4">Welcome to Laplace</h1>
+            <p className="mb-4">Please sign in to view your repositories.</p>
+            <LoginButton />
+          </div>
+        ) : (
+          <div className="h-full space-y-6 max-w-6xl mx-auto">
+            {activeSection === "code" && (
+              <>
+                {imageUrl ? (
+                  <CodeViewer
+                    content={[]}
+                    imageSrc={imageUrl}
+                    fileName={fileName}
+                    filePath={currentPath}
+                    githubToken={session.accessToken}
+                  />
+                ) : fileContent.length > 0 ? (
+                  <CodeViewer
+                    content={fileContent}
+                    fileName={fileName}
+                    filePath={currentPath}
+                  />
+                ) : selectedRepo ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <Folder className="h-16 w-16 mb-4" />
+                    {currentPath ? (
+                      <>
+                        <p className="text-lg">Browse directories</p>
+                        <p className="text-sm mt-2">
+                          Select a file to view its content
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-lg">Repository selected</p>
+                        <p className="text-sm mt-2">
+                          Navigate through the directory structure
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <Github className="h-16 w-16 mb-4" />
+                    <p className="text-lg">Select a repository</p>
+                    <p className="text-sm mt-2">
+                      Choose from your list of repositories to begin
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+            {activeSection === "pull-requests" && (
+              <PullRequestsSection selectedRepo={selectedRepo} />
+            )}
 
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d] scrollbar-track-[#0d1117] pb-4">
-                <RepositoryList
-                  onRepoSelect={handleRepoSelect}
-                  onFileSelect={(content, url, name) => {
-                    setFileContent(content);
-                    setImageUrl(url);
-                    setFileName(name);
-                  }}
-                  currentPath={currentPath}
-                  onPathChange={handlePathChange}
-                  selectedRepo={selectedRepo}
-                />
-              </div>
-            </div>
-          </aside>
+            {activeSection === "issues" && (
+              <IssuesSection selectedRepo={selectedRepo} />
+            )}
+
+            {activeSection === "security" && (
+              <SecuritySection
+                apiUrl={
+                  process.env.NEXT_PUBLIC_API_SEC_URL ||
+                  "http://localhost:1234/v1/chat/completions"
+                }
+                repoData={{
+                  selectedRepo,
+                  repoStructure,
+                }}
+              />
+            )}
+
+            {activeSection === "insights" && (
+              <InsightsSection selectedRepo={selectedRepo} />
+            )}
+
+            {activeSection === "agents" && <AgentsSection />}
+          </div>
         )}
+      </main>
 
-        <main
-          className={`flex-1 p-4 transition-all duration-300 ${
-            isSidebarOpen ? "ml-64 pl-6" : "ml-10"
-          } ${isChatSidebarOpen ? "mr-64 pr-6" : "mr-10"} mt-8`}
-        >
-          {!session?.user ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <h1 className="text-2xl font-bold mb-4">Welcome to Laplace</h1>
-              <p className="mb-4">Please sign in to view your repositories.</p>
-              <LoginButton />
-            </div>
-          ) : (
-            <div className="h-full space-y-6 max-w-6xl mx-auto">
-              {activeSection === "code" && (
-                <>
-                  {imageUrl ? (
-                    <CodeViewer
-                      content={[]}
-                      imageSrc={imageUrl}
-                      fileName={fileName}
-                      filePath={currentPath}
-                      githubToken={session.accessToken}
-                    />
-                  ) : fileContent.length > 0 ? (
-                    <CodeViewer
-                      content={fileContent}
-                      fileName={fileName}
-                      filePath={currentPath}
-                    />
-                  ) : selectedRepo ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                      <Folder className="h-16 w-16 mb-4" />
-                      {currentPath ? (
-                        <>
-                          <p className="text-lg">Browse directories</p>
-                          <p className="text-sm mt-2">
-                            Select a file to view its content
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-lg">Repository selected</p>
-                          <p className="text-sm mt-2">
-                            Navigate through the directory structure
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                      <Github className="h-16 w-16 mb-4" />
-                      <p className="text-lg">Select a repository</p>
-                      <p className="text-sm mt-2">
-                        Choose from your list of repositories to begin
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-              {activeSection === "pull-requests" && (
-                <PullRequestsSection selectedRepo={selectedRepo} />
-              )}
-
-              {activeSection === "issues" && (
-                <IssuesSection selectedRepo={selectedRepo} />
-              )}
-
-              {activeSection === "security" && (
-                <SecuritySection
-                  apiUrl={
-                    process.env.NEXT_PUBLIC_API_SEC_URL ||
-                    "http://localhost:1234/v1/chat/completions"
-                  }
-                  repoData={{
-                    selectedRepo,
-                    repoStructure,
-                  }}
-                />
-              )}
-
-              {activeSection === "insights" && (
-                <InsightsSection selectedRepo={selectedRepo} />
-              )}
-
-              {activeSection === "agents" && <AgentsSection />}
-            </div>
-          )}
-        </main>
-
-        {session?.user && (
-          <ChatSidebar
-            apiUrl={
-              process.env.NEXT_PUBLIC_API_SEC_URL ||
-              "http://localhost:1234/v1/chat/completions"
-            }
-            isOpen={isChatSidebarOpen}
-            onToggle={() => setIsChatSidebarOpen(!isChatSidebarOpen)}
-            repoData={{
-              selectedRepo,
-              currentPath,
-              fileContent,
-              repoStructure,
-            }}
-            githubToken={session.accessToken!}
-            fileName={fileName}
-          />
-        )}
-      </div>
+      {/* Chat flotante si es necesario */}
+      <FloatingChat
+        apiUrl={process.env.NEXT_PUBLIC_API_URL || ""}
+        repoData={{
+          selectedRepo: selectedRepo || null,
+          currentPath,
+          fileContent,
+          repoStructure,
+        }}
+        githubToken={session?.accessToken || ""}
+      />
     </div>
   );
 }

@@ -1,19 +1,18 @@
-import type { Repository } from './repository';
+import type { Repository } from "./repository";
 
 export interface FileNode {
-  id: string;
   name: string;
   path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
+  type: "file" | "directory";
   content?: string;
-  url?: string;
+  children?: FileNode[];
 }
 
 export interface CodeViewerProps {
-  repository: {
-    id: number;
-    full_name: string;
-    provider: 'github' | 'gitlab';
-  };
+  content?: string[];
+  fileName?: string;
+  filePath?: string;
+  imageSrc?: string;
+  githubToken?: string;
+  repository?: string;
 }

@@ -2,15 +2,13 @@
 
 import type React from "react";
 
-import { ThemeProvider } from "@/components/theme-provider";
 import { SessionProvider } from "next-auth/react";
+import { ChatProvider } from "@/contexts/chat-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark">
-        {children}
-      </ThemeProvider>
+      <ChatProvider>{children}</ChatProvider>
     </SessionProvider>
   );
 }

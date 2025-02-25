@@ -1,307 +1,204 @@
 "use client";
 
-import { Shield, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import Prism from "prismjs";
-import "prismjs/components/prism-jsx";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-typescript";
-import "prismjs/themes/prism-okaidia.css";
+import { AlertCircle, AlertTriangle, Shield } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import remarkGfm from "remark-gfm";
-import { useSession } from 'next-auth/react';
-import type { Repository } from '../types/repository';
+import type { Repository } from "@/types/repository";
 
-interface RepoItem {
-  name: string;
-  type: "file" | "dir" | "image";
-  path: string;
-}
-
+// First, update the SecurityAlert interface
 interface SecurityAlert {
-  id: number;
+  id: number | string;
   affected_package: string;
-  severity: 'critical' | 'high' | 'moderate' | 'low';
+  severity: "critical" | "high" | "moderate" | "low";
   title: string;
   description: string;
   created_at: string;
-  state: 'open' | 'fixed';
+  state: "open" | "fixed";
 }
 
-interface SecuritySectionProps {
-  apiUrl?: string;
-  repoData?: {
-    repoStructure: RepoItem[];
-    selectedRepo: string | null;
-  };
-  repository?: Repository;
+// Update the SecurityReport interface
+interface SecurityReport {
+  content: string;
+  isStreaming: boolean;
+  timestamp: number;
 }
 
-const CODE_EXTENSIONS = new Set([
-  "js",
-  "ts",
-  "jsx",
-  "tsx",
-  "py",
-  "html",
-  "java",
-  "cpp",
-  "cs",
-]);
-
-const CONFIG_PATTERNS = [
-  /(\/|^)(config|\.github|\.vscode|tests?|__mocks__|docker|scripts)(\/|$)/i,
-  /\.(yml|yaml|toml|env|ini|cfg|conf|bak|css|jpeg|jpg|png|gif|svg|webp)$/i,
-  /(\/|^)(tailwind|postcss|vite|webpack|jest|babel)\.config\.[jt]sx?$/i,
-  /(\/|^)(tsconfig|jsconfig|next\.config|svelte\.config)\.[jt]sx?$/i,
-  /(\/|^)\..*rc(\.[jt]sx?)?$/i,
-];
-
-export function SecuritySection({ apiUrl, repoData, repository }: SecuritySectionProps) {
+export function SecuritySection({ repository }: { repository: Repository }) {
   const { data: session } = useSession();
   const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [securityAnalysis, setSecurityAnalysis] = useState<string>("");
-  const [hasFetched, setHasFetched] = useState(false);
-  const [abortController, setAbortController] =
-    useState<AbortController | null>(null);
-  const analysisContainerRef = useRef<HTMLDivElement>(null);
+  const [report, setReport] = useState<SecurityReport | null>(null);
+  const analysisRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const filterCodeFiles = useCallback((files: RepoItem[]) => {
-    return files.filter((file) => {
-      if (file.type !== "file") return false;
-      const extension = file.name.split(".").pop()?.toLowerCase() || "";
-      const fullPath = file.path.toLowerCase();
-      const isCodeFile = CODE_EXTENSIONS.has(extension);
-      const isExcludedFile = CONFIG_PATTERNS.some(
-        (pattern) =>
-          pattern.test(fullPath) || pattern.test(file.name.toLowerCase())
-      );
-      return isCodeFile && !isExcludedFile;
-    });
-  }, []);
-
-  const performAnalysis = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setSecurityAnalysis("");
-      setHasFetched(true);
-
-      // Verificar que la URL de la API y repoData existen
-      if (!apiUrl) {
-        throw new Error("URL de la API no configurada");
-      }
-
-      if (!repoData?.repoStructure) {
-        throw new Error("No hay estructura del repositorio disponible");
-      }
-
-      const filteredCodeFiles = filterCodeFiles(repoData.repoStructure);
-      if (filteredCodeFiles.length === 0) {
-        throw new Error(
-          "No se encontraron archivos de código válidos para analizar"
-        );
-      }
-
-      const controller = new AbortController();
-      setAbortController(controller);
-      const timeoutId = setTimeout(() => controller.abort(), 100000);
-
-      try {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            // Agregar cache-control para evitar problemas de caché
-            "Cache-Control": "no-cache",
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Eres un experto en seguridad de código. Analiza en el idioma que te hablan los siguientes archivos y detecta posibles vulnerabilidades. Organiza los resultados en formato markdown con secciones claras, viñetas y ejemplos de código cuando sea relevante.",
-              },
-              {
-                role: "user",
-                content: JSON.stringify({
-                  files: filteredCodeFiles.map((f) => f.path),
-                  metadata: {
-                    repoName: repoData.selectedRepo,
-                    totalFiles: filteredCodeFiles.length,
-                  },
-                }),
-              },
-            ],
-            model: "deepseek-r1-distill-qwen-7b",
-            temperature: 0.3,
-            stream: true,
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Error ${response.status}: ${errorText || response.statusText}`
-          );
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("No se pudo obtener el lector de la respuesta");
-        }
-
-        const decoder = new TextDecoder();
-        let analysisResult = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.trim() && line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data?.choices?.[0]?.delta?.content) {
-                  analysisResult += data.choices[0].delta.content;
-                  setSecurityAnalysis(
-                    (prev) => prev + data.choices[0].delta.content
-                  );
-                }
-              } catch (err) {
-                console.error("Error parsing chunk:", err, "Raw line:", line);
-                // No interrumpir el proceso por errores de parsing
-                continue;
-              }
-            }
-          }
-        }
-      } catch (fetchError) {
-        if ((fetchError as Error).name === "AbortError") {
-          throw new Error("La solicitud fue cancelada");
-        }
-        // Mejorar el mensaje de error para problemas de red
-        if (!navigator.onLine) {
-          throw new Error("No hay conexión a Internet");
-        }
-        throw new Error(`Error de red: ${(fetchError as Error).message}`);
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        console.error("Error completo:", err);
-        setError(err instanceof Error ? err.message : "Error desconocido");
-      }
-    } finally {
-      setLoading(false);
-      setAbortController(null);
-    }
-  }, [apiUrl, filterCodeFiles, repoData?.repoStructure, repoData?.selectedRepo]);
-
-  const handleStop = () => {
-    if (abortController) {
-      abortController.abort();
-      setLoading(false);
-    }
-  };
-
+  // Add near the top of your component
   useEffect(() => {
-    if (securityAnalysis && analysisContainerRef.current) {
-      const timer = setTimeout(() => {
-        Prism.highlightAllUnder(analysisContainerRef.current!);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [securityAnalysis]);
+    console.log("Session state:", {
+      isAuthenticated: !!session,
+      hasAccessToken: !!session?.accessToken,
+    });
 
-  const renderMarkdown = useCallback(
-    (content: string) => (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          code({ node, className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || "");
-            return match ? (
-              <pre className={`rounded-lg p-4 bg-[#1e1e1e] my-4`}>
-                <code
-                  className={`language-${match[1]}`}
-                  ref={(el) => {
-                    if (el) Prism.highlightElement(el);
-                  }}
-                >
-                  {String(children).replace(/\n$/, "")}
-                </code>
-              </pre>
-            ) : (
-              <code className="bg-[#1e1e1e] px-1 py-0.5 rounded" {...props}>
-                {children}
-              </code>
-            );
-          },
-          em({ children }) {
-            return <span className="text-gray-400 italic">{children}</span>;
-          },
-          blockquote({ children }) {
-            return (
-              <blockquote className="border-l-4 border-gray-600 pl-4 text-gray-400 my-4">
-                {children}
-              </blockquote>
-            );
-          },
-          h2({ children }) {
-            return (
-              <h2 className="text-xl font-semibold text-blue-300 mt-6 mb-3">
-                {children}
-              </h2>
-            );
-          },
-          ul({ children }) {
-            return (
-              <ul className="list-disc pl-6 space-y-2 my-4">{children}</ul>
-            );
-          },
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    ),
-    []
-  );
+    console.log("Repository state:", {
+      hasRepo: !!repository,
+      fullName: repository?.full_name,
+      provider: repository?.provider,
+    });
+  }, [session, repository]);
 
+  // Update the auth check in fetchSecurityAlerts
   useEffect(() => {
     async function fetchSecurityAlerts() {
-      if (!session?.accessToken || !repository) return;
+      if (!session?.user?.accessToken || !repository?.full_name) {
+        console.log("Missing requirements:", {
+          hasToken: !!session?.user?.accessToken, // Changed from session?.accessToken
+          hasRepo: !!repository?.full_name,
+          token: session?.user?.accessToken?.slice(0, 10) + "...",
+        });
+        return;
+      }
 
       setLoading(true);
       setError(null);
 
       try {
-        const baseUrl = repository.provider === 'github'
-          ? `https://api.github.com/repos/${repository.full_name}/security/alerts`
-          : `https://gitlab.com/api/v4/projects/${repository.id}/vulnerability_findings`;
+        const [owner, repo] = repository.full_name.split("/");
+        const endpoints = [
+          `https://api.github.com/repos/${owner}/${repo}/code-scanning/alerts`,
+          `https://api.github.com/repos/${owner}/${repo}/security-advisories`,
+          `https://api.github.com/repos/${owner}/${repo}/vulnerability-alerts`,
+        ];
 
-        const response = await fetch(baseUrl, {
-          headers: {
-            'Authorization': `Bearer ${session.accessToken}`,
-            'Accept': repository.provider === 'github'
-              ? 'application/vnd.github.v3+json'
-              : 'application/json',
-          },
-        });
+        const responses = await Promise.all(
+          endpoints.map(async (endpoint) => {
+            try {
+              const res = await fetch(endpoint, {
+                headers: {
+                  Authorization: `Bearer ${session.user.accessToken}`,
+                  Accept: "application/vnd.github.v3+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+                },
+              });
 
-        if (!response.ok) throw new Error('Failed to fetch security alerts');
+              if (!res.ok) {
+                console.log(`API ${endpoint} returned ${res.status}`);
+                return {
+                  url: endpoint,
+                  status: res.status,
+                  ok: false,
+                  data: null,
+                };
+              }
 
-        const data = await response.json();
-        setAlerts(data);
+              // Check if there's content before trying to parse
+              const text = await res.text();
+              const data = text ? JSON.parse(text) : null;
+
+              return {
+                url: endpoint,
+                status: res.status,
+                ok: true,
+                data,
+              };
+            } catch (error) {
+              console.error(`Error fetching ${endpoint}:`, error);
+              return { url: endpoint, status: 500, ok: false, data: null };
+            }
+          })
+        );
+
+        console.log(
+          "GitHub API responses:",
+          responses.map((r) => ({
+            url: r.url,
+            status: r.status,
+            hasData: !!r.data,
+          }))
+        );
+
+        // Collect all alerts from successful responses
+        const allAlerts = [];
+        for (const response of responses) {
+          if (response.ok && response.data) {
+            if (Array.isArray(response.data)) {
+              allAlerts.push(...response.data);
+            }
+          }
+        }
+
+        if (allAlerts.length > 0) {
+          const processedAlerts = allAlerts
+            .filter((alert) => alert && typeof alert === "object")
+            .map((alert: any) => {
+              try {
+                const cleanText = (text: any) =>
+                  typeof text === "string" ? text : String(text || "");
+
+                return {
+                  id: String(alert.number || alert.id || Math.random()),
+                  affected_package: cleanText(
+                    alert.tool?.name ||
+                      alert.securityVulnerability?.package?.name ||
+                      "Unknown"
+                  ),
+                  severity: (
+                    alert.rule?.severity ||
+                    alert.severity ||
+                    "low"
+                  ).toLowerCase(),
+                  title: cleanText(
+                    alert.rule?.description ||
+                      alert.title ||
+                      alert.message ||
+                      "Unknown Issue"
+                  ),
+                  description: cleanText(
+                    alert.most_recent_instance?.message ||
+                      alert.description ||
+                      ""
+                  ),
+                  created_at: String(
+                    alert.created_at || new Date().toISOString()
+                  ),
+                  state: alert.state === "fixed" ? "fixed" : "open",
+                } as SecurityAlert;
+              } catch (e) {
+                console.error("Error processing alert:", e);
+                return null;
+              }
+            })
+            .filter(Boolean) as SecurityAlert[];
+
+          // Deduplicate alerts based on title and description
+          const uniqueAlerts = processedAlerts.reduce((acc, current) => {
+            const isDuplicate = acc.some(
+              (alert) =>
+                alert.title === current.title &&
+                alert.description === current.description
+            );
+            if (!isDuplicate) {
+              acc.push(current);
+            }
+            return acc;
+          }, [] as SecurityAlert[]);
+
+          setAlerts(uniqueAlerts);
+        } else {
+          setAlerts([]);
+          console.log("No alerts found in responses");
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error fetching security alerts');
+        console.error("Security fetch error:", err);
+        setError(
+          err instanceof Error
+            ? `Failed to fetch security data: ${err.message}`
+            : "Failed to fetch security data"
+        );
       } finally {
         setLoading(false);
       }
@@ -310,27 +207,130 @@ export function SecuritySection({ apiUrl, repoData, repository }: SecuritySectio
     fetchSecurityAlerts();
   }, [repository, session]);
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical':
-        return 'text-red-400 bg-red-500/10';
-      case 'high':
-        return 'text-orange-400 bg-orange-500/10';
-      case 'moderate':
-        return 'text-yellow-400 bg-yellow-500/10';
-      case 'low':
-        return 'text-blue-400 bg-blue-500/10';
-      default:
-        return 'text-gray-400 bg-gray-500/10';
+  // DeepSeek Analysis
+  const startAnalysis = useCallback(async () => {
+    if (!repository?.full_name || analyzing) return;
+
+    setAnalyzing(true);
+    setError(null);
+    setReport({
+      content:
+        "# Security Analysis Report\n\n_Analyzing repository content..._",
+      isStreaming: true,
+      timestamp: Date.now(),
+    });
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      // First, get the repository content
+      const [owner, repo] = repository.full_name.split("/");
+      const contentResponse = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents`,
+        {
+          headers: {
+            Authorization: `Bearer ${session?.user?.accessToken}`,
+            Accept: "application/vnd.github.v3+json",
+          },
+        }
+      );
+
+      if (!contentResponse.ok) {
+        throw new Error("Failed to fetch repository content");
+      }
+
+      const contents = await contentResponse.json();
+
+      // Start the security analysis with repository context
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repository: repository.full_name,
+          provider: repository.provider,
+          contents: contents,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Analysis request failed");
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream available");
+
+      let fullContent = "";
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split("\n");
+
+        for (const line of lines) {
+          if (line.trim().startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.choices?.[0]?.delta?.content) {
+                fullContent += data.choices[0].delta.content;
+                setReport((prev) => ({
+                  content: fullContent,
+                  isStreaming: true,
+                  timestamp: Date.now(),
+                }));
+              }
+            } catch (e) {
+              console.error("Parse error:", e);
+            }
+          }
+        }
+      }
+
+      setReport((prev) => ({
+        content: fullContent,
+        isStreaming: false,
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      if (err.name === "AbortError") {
+        setReport({
+          content:
+            "# Analysis Cancelled\n\nThe security analysis was interrupted.",
+          isStreaming: false,
+          timestamp: Date.now(),
+        });
+      } else {
+        setError(err instanceof Error ? err.message : "Analysis failed");
+      }
+    } finally {
+      setAnalyzing(false);
+      abortControllerRef.current = null;
     }
-  };
+  }, [repository, session]);
+
+  const stopAnalysis = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setAnalyzing(false);
+    }
+  }, []);
 
   if (loading) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-          <span className="ml-2 text-gray-400">Scanning repository...</span>
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
+          <Shield className="h-6 w-6" />
+          Loading Security Overview...
+        </h2>
+        <div className="space-y-4">
+          <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
+            <div className="flex flex-col gap-2">
+              <div className="h-4 bg-gray-700 rounded w-3/4" />
+              <div className="h-4 bg-gray-700 rounded w-1/2" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -339,9 +339,12 @@ export function SecuritySection({ apiUrl, repoData, repository }: SecuritySectio
   if (error) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <div className="p-4 bg-red-500/10 text-red-400 rounded-lg flex items-center">
-          <Shield className="h-5 w-5 mr-2" />
-          {error}
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-red-400">
+          <AlertCircle className="h-6 w-6" />
+          Error Loading Security Data
+        </h2>
+        <div className="space-y-4">
+          <p className="text-red-300 font-mono text-sm">{error}</p>
         </div>
       </div>
     );
@@ -349,91 +352,140 @@ export function SecuritySection({ apiUrl, repoData, repository }: SecuritySectio
 
   return (
     <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-        <Shield className="h-6 w-6" />
-        Security Overview
+      <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-200">
+        <Shield className="h-6 w-6 text-blue-400" />
+        Security Overview - {repository.full_name}
       </h2>
 
+      {/* Security Alerts Section */}
       <div className="space-y-6">
-        {/* Security Summary */}
+        {/* Alerts Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 bg-[#0d1117] rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Critical</span>
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            </div>
-            <span className="text-2xl font-bold text-gray-200">
-              {alerts.filter(a => a.severity === 'critical').length}
-            </span>
+          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">
+              Critical/High
+            </h3>
+            <p className="text-2xl font-bold text-red-400">
+              {
+                alerts.filter((a) => ["critical", "high"].includes(a.severity))
+                  .length
+              }
+            </p>
           </div>
-          <div className="p-4 bg-[#0d1117] rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">High</span>
-              <AlertTriangle className="h-5 w-5 text-orange-400" />
-            </div>
-            <span className="text-2xl font-bold text-gray-200">
-              {alerts.filter(a => a.severity === 'high').length}
-            </span>
+          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">
+              Open Alerts
+            </h3>
+            <p className="text-2xl font-bold text-yellow-400">
+              {alerts.filter((a) => a.state === "open").length}
+            </p>
           </div>
-          <div className="p-4 bg-[#0d1117] rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Moderate</span>
-              <AlertTriangle className="h-5 w-5 text-yellow-400" />
-            </div>
-            <span className="text-2xl font-bold text-gray-200">
-              {alerts.filter(a => a.severity === 'moderate').length}
-            </span>
+          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Fixed</h3>
+            <p className="text-2xl font-bold text-green-400">
+              {alerts.filter((a) => a.state === "fixed").length}
+            </p>
           </div>
         </div>
 
         {/* Alerts List */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-200">Security Alerts</h3>
-          {alerts.length === 0 ? (
-            <div className="p-4 bg-[#0d1117] rounded-lg text-center text-gray-400">
-              No security alerts found
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          getSeverityColor(alert.severity)
-                        }`}>
-                          {alert.severity}
-                        </span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          alert.state === 'fixed' 
-                            ? 'text-green-400 bg-green-500/10' 
-                            : 'text-red-400 bg-red-500/10'
-                        }`}>
-                          {alert.state}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-medium text-gray-200 mb-1">
-                        {alert.title}
-                      </h4>
-                      <p className="text-sm text-gray-400">
-                        {alert.description}
-                      </p>
-                      <div className="mt-2 text-xs text-gray-500">
-                        Affected package: {alert.affected_package}
-                      </div>
+          <h3 className="text-lg font-semibold text-gray-200">
+            Security Alerts
+          </h3>
+          {alerts.length > 0 ? (
+            alerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-200">
+                      {alert.title}
+                    </h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {alert.description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-gray-400">
+                        {alert.affected_package}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs ${
+                          alert.severity === "critical"
+                            ? "bg-red-500/20 text-red-400"
+                            : alert.severity === "high"
+                            ? "bg-orange-500/20 text-orange-400"
+                            : alert.severity === "moderate"
+                            ? "bg-yellow-500/20 text-yellow-400"
+                            : "bg-blue-500/20 text-blue-400"
+                        }`}
+                      >
+                        {alert.severity}
+                      </span>
                     </div>
-                    {alert.state === 'fixed' ? (
-                      <CheckCircle className="h-5 w-5 text-green-400 ml-4" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-400 ml-4" />
-                    )}
                   </div>
                 </div>
-              ))}
+              </div>
+            ))
+          ) : (
+            <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+              <p className="text-gray-400">No security alerts found</p>
+            </div>
+          )}
+        </div>
+
+        {/* Analysis Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-200">
+              AI Security Analysis
+            </h3>
+            <button
+              onClick={analyzing ? stopAnalysis : startAnalysis}
+              className={`px-4 py-2 rounded-lg text-sm ${
+                analyzing
+                  ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                  : "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+              }`}
+            >
+              {analyzing ? "Stop Analysis" : "Start Analysis"}
+            </button>
+          </div>
+
+          {report && (
+            <div
+              ref={analysisRef}
+              className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]"
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ node, inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code
+                        className="bg-[#1c2128] px-2 py-1 rounded text-sm"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {report.content}
+              </ReactMarkdown>
             </div>
           )}
         </div>

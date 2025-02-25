@@ -92,3 +92,102 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.prose {
+  color: #e6edf3;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  color: #e6edf3;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 0.5rem;
+}
+
+.prose p {
+  color: #a3b3bc;
+  margin: 1rem 0;
+  line-height: 1.6;
+}
+
+.prose code {
+  background: #1c2128;
+  border-radius: 0.25rem;
+  padding: 0.2em 0.4em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  background: #161b22 !important;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 1rem !important;
+  margin: 0 !important;
+  overflow-x: auto;
+}
+
+.prose ul {
+  color: #a3b3bc;
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.prose li {
+  margin: 0.25rem 0;
+}
+
+.prose strong {
+  color: #e6edf3;
+}
+
+.prose em {
+  color: #a3b3bc;
+}
+
+/* Syntax highlighting colors */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #8b949e;
+}
+
+.token.keyword {
+  color: #ff7b72;
+}
+
+.token.string {
+  color: #a5d6ff;
+}
+
+.token.function {
+  color: #d2a8ff;
+}
+
+.token.number {
+  color: #79c0ff;
+}
+
+/* Improved markdown formatting */
+.prose h1 {
+  font-size: 1.875rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}

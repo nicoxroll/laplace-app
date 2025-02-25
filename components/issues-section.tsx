@@ -1,10 +1,11 @@
 // components/issues-section.tsx
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { AlertCircle, Search, Loader2 } from 'lucide-react';
-import type { Repository } from '../types/repository';
+import { Octokit } from "@octokit/rest";
+import { AlertCircle, Search } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useCallback, useEffect, useState } from "react";
+import type { Repository } from "../types/repository";
 
 interface Issue {
   id: number;
@@ -16,7 +17,11 @@ interface Issue {
   user: {
     login: string;
     avatar_url: string;
-  };
+  } | null;
+  labels: Array<{
+    name: string;
+    color: string;
+  }>;
 }
 
 interface IssuesSectionProps {
@@ -24,76 +29,104 @@ interface IssuesSectionProps {
 }
 
 export function IssuesSection({ repository }: IssuesSectionProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    async function fetchIssues() {
-      if (!session?.user?.accessToken || !repository) return;
+  const fetchIssues = useCallback(async () => {
+    // Check authentication status
+    if (status === "loading") return;
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        const isGithub = repository.provider === 'github';
-        const baseUrl = isGithub
-          ? `https://api.github.com/repos/${repository.full_name}/issues?state=all`
-          : `https://gitlab.com/api/v4/projects/${repository.id}/issues`;
-
-        const response = await fetch(baseUrl, {
-          headers: {
-            'Authorization': `Bearer ${session.user.accessToken}`,
-            'Accept': isGithub 
-              ? 'application/vnd.github.v3+json'
-              : 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch issues: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        
-        // Transform GitLab data to match GitHub format
-        const transformedIssues = isGithub ? data : data.map((issue: any) => ({
-          id: issue.id,
-          number: issue.iid,
-          title: issue.title,
-          state: issue.state,
-          created_at: issue.created_at,
-          html_url: issue.web_url,
-          user: {
-            login: issue.author.username,
-            avatar_url: issue.author.avatar_url
-          }
-        }));
-
-        setIssues(transformedIssues);
-      } catch (err) {
-        console.error('Error fetching issues:', err);
-        setError(err instanceof Error ? err.message : 'Error fetching issues');
-      } finally {
-        setLoading(false);
-      }
+    // Modificamos la verificación de autenticación para incluir el token en user
+    if (!session?.user?.accessToken) {
+      console.log("Session debug:", session); // Para debugging
+      setError("Authentication token not found");
+      setLoading(false);
+      return;
     }
 
-    fetchIssues();
-  }, [repository, session]);
+    // Check repository
+    if (!repository || !repository.full_name) {
+      setError("No repository selected");
+      setLoading(false);
+      return;
+    }
 
-  const filteredIssues = issues.filter(issue =>
+    // Verify provider
+    if (repository.provider !== "github") {
+      setError("Only GitHub repositories are supported");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const octokit = new Octokit({
+        auth: session.user.accessToken, // Usamos el token desde session.user
+      });
+
+      const [owner, repo] = repository.full_name.split("/");
+
+      const { data } = await octokit.issues.listForRepo({
+        owner,
+        repo,
+        state: "all",
+        per_page: 100,
+        sort: "created",
+        direction: "desc",
+      });
+
+      // Filter out pull requests from issues
+      const issuesOnly = data
+        .filter((issue) => !issue.pull_request && issue.user !== null)
+        .map((issue) => ({
+          ...issue,
+          labels: issue.labels.map((label) =>
+            typeof label === "string"
+              ? { name: label, color: "" }
+              : { name: label.name || "", color: label.color || "" }
+          ),
+        }));
+
+      setIssues(issuesOnly as Issue[]);
+    } catch (err) {
+      console.error("Error fetching issues:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch issues from GitHub"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [repository, session, status]);
+
+  useEffect(() => {
+    fetchIssues();
+  }, [fetchIssues]);
+
+  const filteredIssues = issues.filter((issue) =>
     issue.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-          <span className="ml-2 text-gray-400">Loading issues...</span>
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
+          <AlertCircle className="h-6 w-6" />
+          Cargando Issues...
+        </h2>
+        <div className="space-y-4">
+          <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
+            <div className="flex flex-col gap-2">
+              <div className="h-4 bg-gray-700 rounded w-3/4 animate-pulse" />
+              <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -102,9 +135,12 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
   if (error) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <div className="p-4 bg-red-500/10 text-red-400 rounded-lg flex items-center">
-          <AlertCircle className="h-5 w-5 mr-2" />
-          {error}
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-red-400">
+          <AlertCircle className="h-6 w-6" />
+          Error al cargar Issues
+        </h2>
+        <div className="space-y-4">
+          <p className="text-red-300 font-mono text-sm">{error}</p>
         </div>
       </div>
     );
@@ -114,42 +150,58 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
     <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
         <AlertCircle className="h-6 w-6" />
-        Issues
+        Issues - {repository.full_name || "Sin repositorio seleccionado"}
       </h2>
 
       <div className="space-y-4">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search issues..."
-            className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
+        <div className="flex gap-4 mb-6">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Buscar Issues..."
+              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
+          </div>
         </div>
 
         {filteredIssues.length === 0 ? (
-          <div className="p-4 text-center text-gray-400">
-            No issues found
+          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+            <p className="text-gray-400">No se encontraron issues</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-[#30363d]">
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">Title</th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">Author</th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">State</th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">Created</th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Número
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Título
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Autor
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm text-gray-400">
+                    Fecha
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredIssues.map((issue) => (
                   <tr
                     key={issue.id}
-                    className="border-b border-[#30363d] hover:bg-[#1c2128]"
+                    className="border-b border-[#30363d] hover:bg-[#0d1117]"
                   >
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      #{issue.number}
+                    </td>
                     <td className="px-4 py-3">
                       <a
                         href={issue.html_url}
@@ -162,22 +214,26 @@ export function IssuesSection({ repository }: IssuesSectionProps) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <img
-                          src={issue.user.avatar_url}
-                          alt={issue.user.login}
-                          className="w-5 h-5 rounded-full"
-                        />
-                        <span className="text-sm text-gray-300">
-                          {issue.user.login}
+                        {issue.user && (
+                          <img
+                            src={issue.user.avatar_url}
+                            alt={issue.user.login}
+                            className="w-6 h-6 rounded-full"
+                          />
+                        )}
+                        <span className="text-gray-300">
+                          {issue.user && issue.user.login}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        issue.state === 'open'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-purple-500/20 text-purple-400'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          issue.state === "open"
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-red-500/20 text-red-400"
+                        }`}
+                      >
                         {issue.state}
                       </span>
                     </td>

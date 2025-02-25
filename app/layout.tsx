@@ -1,15 +1,12 @@
-import { Inter } from "next/font/google";
-import type React from "react";
+import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import { ChatProvider } from "@/contexts/chat-context";
+import { RepositoryProvider } from "@/contexts/repository-context";
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata = {
-  generator: "v0.dev",
-  icons: {
-    icon: "/favicon.ico", // Ruta a tu archivo favicon
-  },
+export const metadata: Metadata = {
+  title: "Laplace",
+  description: "AI-powered code analysis",
 };
 
 export default function RootLayout({
@@ -19,8 +16,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Providers>{children}</Providers>
+      <body>
+        <Providers>
+          <RepositoryProvider>
+            <ChatProvider>{children}</ChatProvider>
+          </RepositoryProvider>
+        </Providers>
       </body>
     </html>
   );
