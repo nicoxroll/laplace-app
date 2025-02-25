@@ -1,11 +1,11 @@
 "use client";
-import { RepositoryContext, RepositoryFile } from "@/types/repository";
 import "/styles/globals.css";
 
+import { useChat } from "@/contexts/chat-context";
+import { useRepository } from "@/contexts/repository-context";
 import {
   Bot,
   ChevronRight,
-  Copy,
   Maximize2,
   Minimize2,
   Send,
@@ -31,8 +31,6 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import remarkGfm from "remark-gfm";
-import { useChat } from "@/contexts/chat-context";
-import { useRepository } from "@/contexts/repository-context";
 
 interface RepoItem {
   name: string;
@@ -523,9 +521,6 @@ code
   );
 }
 
-import { ChatService } from "@/services/chat-service";
-import { ChatProps, ChatState } from "@/types/chat";
-
 interface FloatingChatProps {
   apiUrl: string;
   repoData: RepoData;
@@ -586,33 +581,39 @@ export function FloatingChat() {
         payload: { role: "user", content: input },
       });
 
+      setInput("");
+
+      const response = await fetch(process.env.NEXT_PUBLIC_API_URL!, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-r1-distill-qwen-7b",
+          messages: [
+            {
+              role: "system",
+              content: getRepoContext(),
+            },
+            {
+              role: "user",
+              content: input,
+            },
+          ],
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
       // Add initial assistant message
       dispatch({
         type: "ADD_MESSAGE",
         payload: { role: "assistant", content: "" },
       });
-
-      setInput("");
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: [
-              { role: "system", content: getRepoContext() },
-              { role: "user", content: input },
-            ],
-            stream: true,
-          }),
-          signal: controller.signal,
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to fetch response");
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -645,9 +646,14 @@ export function FloatingChat() {
         }
       }
     } catch (err) {
-      if (err instanceof Error && err.name !== "AbortError") {
-        console.error("Chat error:", err);
-      }
+      console.error("Chat error:", err);
+      dispatch({
+        type: "ADD_MESSAGE",
+        payload: {
+          role: "assistant",
+          content: "Sorry, I encountered an error. Please try again.",
+        },
+      });
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
       setAbortController(null);

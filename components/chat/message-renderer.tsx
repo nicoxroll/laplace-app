@@ -1,7 +1,8 @@
-import { Copy } from "lucide-react";
+"use client";
+
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 
 interface Message {
@@ -12,9 +13,11 @@ interface Message {
 export function MessageRenderer({ message }: { message: Message }) {
   return (
     <div
-      className={`p-4 ${
-        message.role === "user" ? "bg-[#1c2128]" : "bg-[#2d333b]"
-      } rounded-lg mb-4`}
+      className={`p-4 rounded-lg ${
+        message.role === "user"
+          ? "bg-blue-600 text-white ml-8"
+          : "bg-blue-400/10 text-gray-100 mr-8 border border-blue-400/20"
+      }`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -23,38 +26,45 @@ export function MessageRenderer({ message }: { message: Message }) {
             const match = /language-(\w+)/.exec(className || "");
             return !inline && match ? (
               <div className="relative group">
-                <button
-                  onClick={() =>
-                    navigator.clipboard.writeText(String(children))
-                  }
-                  className="absolute right-2 top-2 p-1 rounded bg-[#1c2128] opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Copy code"
-                >
-                  <Copy className="h-4 w-4 text-gray-400" />
-                </button>
                 <SyntaxHighlighter
                   style={oneDark}
                   language={match[1]}
                   PreTag="div"
-                  className="!bg-[#0d1117] !p-4 rounded-lg border border-[#30363d]"
-                  showLineNumbers
                   {...props}
+                  className="!bg-[#1a1d21] !p-4 rounded-lg my-2"
                 >
                   {String(children).replace(/\n$/, "")}
                 </SyntaxHighlighter>
               </div>
             ) : (
               <code
-                className="bg-[#1c2128] px-2 py-1 rounded text-sm"
+                className="bg-[#1a1d21] px-2 py-1 rounded text-gray-100"
                 {...props}
               >
                 {children}
               </code>
             );
           },
-          pre({ children }) {
-            return <div className="my-4">{children}</div>;
-          },
+          p: ({ children }) => <p className="text-current mb-4">{children}</p>,
+          ul: ({ children }) => (
+            <ul className="list-disc list-inside space-y-2 mb-4">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="list-decimal list-inside space-y-2 mb-4">
+              {children}
+            </ol>
+          ),
+          li: ({ children }) => <li className="text-current">{children}</li>,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              className="text-blue-400 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {children}
+            </a>
+          ),
         }}
       >
         {message.content}
