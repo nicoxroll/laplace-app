@@ -11,7 +11,7 @@ interface CodeSectionProps {
 export function CodeSection({ repository }: CodeSectionProps) {
   return (
     <SectionCard>
-      <div className="h-[calc(100vh-12rem)]">
+      <div className="h-[calc(100vh-12rem)] overflow-auto scrollbar-custom">
         <CodeViewer />
       </div>
     </SectionCard>

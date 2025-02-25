@@ -1,5 +1,7 @@
 export type RepositoryProvider = "github" | "gitlab";
 
+export type FileType = "file" | "image" | "binary";
+
 export interface BaseRepository {
   id: string;
   name: string;
@@ -40,10 +42,13 @@ export interface Repository {
 export interface RepositoryFile {
   name: string;
   path: string;
-  type: "file" | "dir";
-  content?: string[];
-  language?: string;
-  children?: RepositoryFile[];
+  type: FileType;
+  content?: string;
+  encoding?: string;
+  url?: string;
+  raw_url?: string;
+  download_url?: string;
+  size?: number;
 }
 
 export interface RepositoryContext {
@@ -55,6 +60,8 @@ export interface RepositoryContext {
     path: string;
     content: string[];
     language?: string;
+    type: FileType;
+    raw_url?: string;
   };
 }
 

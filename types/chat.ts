@@ -1,3 +1,5 @@
+import type { Repository } from "./repository";
+
 interface RepoItem {
   name: string;
   type: "file" | "folder";
@@ -26,13 +28,18 @@ interface FloatingChatProps {
 export interface Message {
   role: "user" | "assistant" | "system";
   content: string;
+  context?: {
+    repository?: Repository;
+    currentFile?: {
+      path: string;
+    };
+  };
 }
 
 export interface ChatState {
   isOpen: boolean;
   isExpanded: boolean;
   messages: Message[];
-  input: string;
   loading: boolean;
 }
 

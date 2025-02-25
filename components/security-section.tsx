@@ -2,7 +2,7 @@
 
 import { SectionCard } from "@/components/ui/section-card";
 import type { Repository } from "@/types/repository";
-import { AlertCircle, Shield } from "lucide-react";
+import { AlertCircle, Shield, Check, Copy } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -469,51 +469,63 @@ export function SecuritySection({ repository }: { repository: Repository }) {
                     code({ node, inline, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || "");
                       const language = match ? match[1] : "";
+                      const [copied, setCopied] = useState(false);
+
+                      const handleCopy = async (text: string) => {
+                        await navigator.clipboard.writeText(text);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      };
 
                       return !inline && match ? (
-                        <div className="relative group">
-                          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="relative mt-4">
+                          <div className="absolute right-2 top-2 z-10">
                             <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(String(children));
-                              }}
-                              className="p-1.5 rounded bg-[#1c2128] hover:bg-[#30363d] text-gray-400"
+                              onClick={() => handleCopy(String(children))}
+                              className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
                               title="Copy code"
                             >
-                              <svg
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" />
-                              </svg>
+                              {copied ? (
+                                <Check className="h-4 w-4 text-green-400" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
                             </button>
                           </div>
                           <SyntaxHighlighter
                             language={language}
                             style={oneDark}
+                            showLineNumbers
                             customStyle={{
                               margin: 0,
-                              borderRadius: "6px",
+                              background: "#0d1117",
                               padding: "1rem",
+                              // Se elimina la línea de border para evitar doble marco:
+                              // border: "1px solid #30363d",
+                              borderRadius: "0.5rem",
                             }}
-                            showLineNumbers
                             lineNumberStyle={{
                               minWidth: "3em",
                               paddingRight: "1em",
                               color: "#484f58",
                               textAlign: "right",
                               userSelect: "none",
+                              borderRight: "1px solid #30363d",
                             }}
-                            {...props}
+                            className="!bg-[#0d1117] overflow-auto scrollbar-custom"
+                            wrapLines
+                            wrapLongLines
+                            lineProps={{
+                              style: { display: "block" },
+                              className: "hover:bg-[#1c2128] px-4 transition-colors",
+                            }}
                           >
                             {String(children).replace(/\n$/, "")}
                           </SyntaxHighlighter>
                         </div>
                       ) : (
                         <code
-                          className="bg-[#1c2128] px-2 py-1 rounded text-sm font-mono"
+                          className="bg-[#161b22] px-1.5 py-0.5 rounded text-sm"
                           {...props}
                         >
                           {children}

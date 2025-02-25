@@ -1,15 +1,9 @@
 "use client";
 
 import { useRepository } from "@/contexts/repository-context";
+import { FileService } from "@/services/file-service";
 import { Octokit } from "@octokit/rest";
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronRight,
-  File,
-  Folder,
-  Search,
-} from "lucide-react";
+import { ArrowLeft, ChevronRight, File, Folder, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
@@ -21,15 +15,13 @@ interface TreeItem {
 }
 
 export function FileTree() {
-  const { data: session } = useSession();
   const { selectedRepo, setCurrentPath, setFileContent } = useRepository();
+  const { data: session } = useSession();
   const [tree, setTree] = useState<TreeItem[]>([]);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set()
-  );
   const [loading, setLoading] = useState(false);
   const [currentFolder, setCurrentFolder] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const fileService = FileService.getInstance();
 
   const fetchContents = async (path: string = "") => {
     if (!session?.user?.accessToken || !selectedRepo) return;
@@ -64,7 +56,16 @@ export function FileTree() {
     if (!session?.user?.accessToken || !selectedRepo) return;
 
     try {
+      if (fileService.isImage(path)) {
+        const imageUrl = fileService.getImageUrl(selectedRepo, path);
+        setFileContent([imageUrl]);
+        setCurrentPath(path);
+        return;
+      }
+
       const [owner, repo] = selectedRepo.full_name.split("/");
+
+      // First try to get the file metadata
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
         {
@@ -77,11 +78,38 @@ export function FileTree() {
 
       if (!response.ok) throw new Error("Failed to fetch file content");
 
-      const content = await response.text();
-      setFileContent(content.split("\n"));
-      setCurrentPath(path);
+      // Try to get the content directly first
+      try {
+        const text = await response.text();
+        setFileContent(text.split("\n"));
+        setCurrentPath(path);
+        return;
+      } catch (error) {
+        console.log("Could not get raw content, trying metadata...");
+      }
+
+      // If direct content fails, try getting metadata and download_url
+      const data = await response.json();
+
+      if (data.download_url) {
+        const rawResponse = await fetch(data.download_url);
+        const content = await rawResponse.text();
+        setFileContent(content.split("\n"));
+        setCurrentPath(path);
+        return;
+      }
+
+      if (data.content && data.encoding === "base64") {
+        const content = fileService.decodeContent(data.content, data.encoding);
+        setFileContent(content.split("\n"));
+        setCurrentPath(path);
+        return;
+      }
+
+      throw new Error("Could not retrieve file content");
     } catch (error) {
       console.error("Error fetching file:", error);
+      setFileContent(["Error loading file content"]);
     }
   };
 
@@ -96,16 +124,7 @@ export function FileTree() {
 
   const handleItemClick = async (item: TreeItem) => {
     if (item.type === "dir") {
-      if (expandedFolders.has(item.path)) {
-        setExpandedFolders((prev) => {
-          const next = new Set(prev);
-          next.delete(item.path);
-          return next;
-        });
-      } else {
-        setExpandedFolders((prev) => new Set([...prev, item.path]));
-        await fetchContents(item.path);
-      }
+      await fetchContents(item.path);
     } else {
       await fetchFileContent(item.path);
     }
@@ -116,7 +135,7 @@ export function FileTree() {
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[#161b22]">
       {/* Search bar */}
       <div className="p-2 border-b border-[#30363d]">
         <div className="relative">
@@ -131,7 +150,7 @@ export function FileTree() {
         </div>
       </div>
 
-      {/* Tree content with custom scrollbar */}
+      {/* Tree content */}
       <div className="flex-1 overflow-auto scrollbar-custom">
         <div className="p-2">
           {/* Back button */}
@@ -163,11 +182,7 @@ export function FileTree() {
                   <div className="flex items-center gap-2 min-w-0">
                     {item.type === "dir" ? (
                       <>
-                        {expandedFolders.has(item.path) ? (
-                          <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
-                        )}
+                        <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
                         <Folder className="h-4 w-4 text-gray-400 shrink-0" />
                       </>
                     ) : (

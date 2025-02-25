@@ -140,6 +140,89 @@ export class RepositoryService {
 
     this.notifyListeners();
   }
+
+  async fetchRepositories(session: Session): Promise<Repository[]> {
+    if (!session?.user?.accessToken) {
+      throw new Error("No authentication token available");
+    }
+
+    try {
+      const [githubRepos, gitlabRepos] = await Promise.all([
+        this.fetchGitHubRepositories(session.user.accessToken),
+        this.fetchGitLabRepositories(session.user.accessToken)
+      ]);
+
+      return [...githubRepos, ...gitlabRepos];
+    } catch (error) {
+      console.error("Error fetching repositories:", error);
+      throw error;
+    }
+  }
+
+  private async fetchGitHubRepositories(token: string): Promise<GitHubRepository[]> {
+    try {
+      const response = await fetch("https://api.github.com/user/repos", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.map((repo: any): GitHubRepository => ({
+        id: repo.id.toString(),
+        name: repo.name,
+        full_name: repo.full_name,
+        description: repo.description,
+        private: repo.private,
+        provider: "github",
+        owner: {
+          login: repo.owner.login,
+          avatar_url: repo.owner.avatar_url,
+        },
+        default_branch: repo.default_branch,
+      }));
+    } catch (error) {
+      console.error("GitHub fetch error:", error);
+      return [];
+    }
+  }
+
+  private async fetchGitLabRepositories(token: string): Promise<GitLabRepository[]> {
+    try {
+      const response = await fetch("https://gitlab.com/api/v4/projects?membership=true", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitLab API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.map((repo: any): GitLabRepository => ({
+        id: repo.id.toString(),
+        name: repo.name,
+        full_name: repo.path_with_namespace,
+        description: repo.description,
+        private: !repo.public,
+        provider: "gitlab",
+        namespace: {
+          name: repo.namespace.name,
+          avatar_url: repo.namespace.avatar_url,
+        },
+        default_branch: repo.default_branch,
+      }));
+    } catch (error) {
+      console.error("GitLab fetch error:", error);
+      return [];
+    }
+  }
 }
 
 export async function fetchRepositories(

@@ -6,6 +6,7 @@ import type { Repository } from "@/types/repository";
 import { Bot, Github, Gitlab, Loader2, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { RepositoryService } from "@/services/repository-service";
 
 export function RepositoryList() {
   const { data: session } = useSession();
@@ -14,42 +15,16 @@ export function RepositoryList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const repositoryService = RepositoryService.getInstance();
 
   useEffect(() => {
     async function fetchRepositories() {
-      if (!session?.user?.accessToken) return;
+      if (!session) return;
 
       try {
         setLoading(true);
-        const response = await fetch("https://api.github.com/user/repos", {
-          headers: {
-            Authorization: `Bearer ${session.user.accessToken}`,
-            Accept: "application/vnd.github+json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch repositories: ${response.statusText}`
-          );
-        }
-
-        const data = await response.json();
-        const transformedData = data.map((repo: any) => ({
-          id: repo.id,
-          name: repo.name,
-          full_name: repo.full_name,
-          description: repo.description,
-          private: repo.private,
-          provider: "github",
-          owner: {
-            login: repo.owner.login,
-            avatar_url: repo.owner.avatar_url,
-          },
-          default_branch: repo.default_branch,
-        }));
-
-        setRepositories(transformedData);
+        const repos = await repositoryService.fetchRepositories(session);
+        setRepositories(repos);
         setError(null);
       } catch (err) {
         setError(

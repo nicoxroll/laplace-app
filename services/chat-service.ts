@@ -80,4 +80,72 @@ export class ChatService {
       }
     }
   }
+
+  async handleSubmit(
+    input: string,
+    repoContext: string,
+    signal: AbortSignal,
+    onStart: () => void,
+    onUpdate: (content: string) => void
+  ): Promise<void> {
+    try {
+      onStart(); // Llamamos esto antes de hacer el fetch
+
+      const response = await fetch(process.env.NEXT_PUBLIC_API_URL!, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-r1-distill-qwen-7b",
+          messages: [
+            {
+              role: "system",
+              content: repoContext,
+            },
+            {
+              role: "user",
+              content: input,
+            },
+          ],
+          stream: true,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.choices?.[0]?.delta?.content) {
+                  accumulatedContent += data.choices[0].delta.content;
+                  onUpdate(accumulatedContent);
+                }
+              } catch (e) {
+                console.error("Error parsing chunk:", e);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
 }
