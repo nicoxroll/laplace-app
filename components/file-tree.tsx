@@ -28,22 +28,55 @@ export function FileTree() {
 
     try {
       setLoading(true);
-      const [owner, repo] = selectedRepo.full_name.split("/");
-      const octokit = new Octokit({ auth: session.user.accessToken });
 
-      const { data } = await octokit.repos.getContent({
-        owner,
-        repo,
-        path,
-      });
+      if (selectedRepo.provider === "gitlab") {
+        const encodedPath = path ? encodeURIComponent(path) : "";
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${selectedRepo.id}/repository/tree?path=${encodedPath}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.user.accessToken}`,
+              Accept: "application/json",
+            },
+          }
+        );
 
-      const contents = Array.isArray(data) ? data : [data];
-      setTree(
-        contents.sort((a, b) => {
-          if (a.type === b.type) return a.name.localeCompare(b.name);
-          return a.type === "dir" ? -1 : 1;
-        })
-      );
+        if (!response.ok) throw new Error("Failed to fetch GitLab contents");
+
+        const data = await response.json();
+        setTree(
+          data
+            .map(
+              (item: any): TreeItem => ({
+                name: item.name,
+                path: item.path,
+                type: item.type === "tree" ? "dir" : "file",
+              })
+            )
+            .sort((a: TreeItem, b: TreeItem) => {
+              if (a.type === b.type) return a.name.localeCompare(b.name);
+              return a.type === "dir" ? -1 : 1;
+            })
+        );
+      } else {
+        // Código existente para GitHub
+        const [owner, repo] = selectedRepo.full_name.split("/");
+        const octokit = new Octokit({ auth: session.user.accessToken });
+        const { data } = await octokit.repos.getContent({
+          owner,
+          repo,
+          path,
+        });
+
+        const contents = Array.isArray(data) ? data : [data];
+        setTree(
+          contents.sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === "dir" ? -1 : 1;
+          })
+        );
+      }
+
       setCurrentFolder(path);
     } catch (error) {
       console.error("Error fetching contents:", error);
@@ -63,50 +96,43 @@ export function FileTree() {
         return;
       }
 
-      const [owner, repo] = selectedRepo.full_name.split("/");
+      if (selectedRepo.provider === "gitlab") {
+        const encodedPath = encodeURIComponent(path);
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${selectedRepo.id}/repository/files/${encodedPath}/raw?ref=${selectedRepo.default_branch}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.user.accessToken}`,
+              Accept: "application/json",
+            },
+          }
+        );
 
-      // First try to get the file metadata
-      const response = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.user.accessToken}`,
-            Accept: "application/vnd.github.v3.raw",
-          },
-        }
-      );
+        if (!response.ok)
+          throw new Error("Failed to fetch GitLab file content");
 
-      if (!response.ok) throw new Error("Failed to fetch file content");
-
-      // Try to get the content directly first
-      try {
-        const text = await response.text();
-        setFileContent(text.split("\n"));
-        setCurrentPath(path);
-        return;
-      } catch (error) {
-        console.log("Could not get raw content, trying metadata...");
-      }
-
-      // If direct content fails, try getting metadata and download_url
-      const data = await response.json();
-
-      if (data.download_url) {
-        const rawResponse = await fetch(data.download_url);
-        const content = await rawResponse.text();
+        const content = await response.text();
         setFileContent(content.split("\n"));
         setCurrentPath(path);
-        return;
-      }
+      } else {
+        // Código existente para GitHub
+        const [owner, repo] = selectedRepo.full_name.split("/");
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.user.accessToken}`,
+              Accept: "application/vnd.github.v3.raw",
+            },
+          }
+        );
 
-      if (data.content && data.encoding === "base64") {
-        const content = fileService.decodeContent(data.content, data.encoding);
+        if (!response.ok) throw new Error("Failed to fetch file content");
+
+        const content = await response.text();
         setFileContent(content.split("\n"));
         setCurrentPath(path);
-        return;
       }
-
-      throw new Error("Could not retrieve file content");
     } catch (error) {
       console.error("Error fetching file:", error);
       setFileContent(["Error loading file content"]);

@@ -147,79 +147,172 @@ export class RepositoryService {
     }
 
     try {
-      const [githubRepos, gitlabRepos] = await Promise.all([
-        this.fetchGitHubRepositories(session.user.accessToken),
-        this.fetchGitLabRepositories(session.user.accessToken)
-      ]);
+      // Verificar el provider de la sesión
+      const provider = session.user?.provider || session.provider;
 
-      return [...githubRepos, ...gitlabRepos];
+      // Fetch repos based on the provider
+      if (provider === "github") {
+        const githubRepos = await this.fetchGitHubRepositories(
+          session.user.accessToken
+        );
+        return githubRepos;
+      } else if (provider === "gitlab") {
+        const gitlabRepos = await this.fetchGitLabRepositories(
+          session.user.accessToken
+        );
+        return gitlabRepos;
+      }
+
+      // Si tenemos ambos tokens, intentar obtener de ambos providers
+      if (session.user.accessToken) {
+        const [githubRepos, gitlabRepos] = await Promise.all([
+          this.fetchGitHubRepositories(session.user.accessToken).catch(
+            () => []
+          ),
+          this.fetchGitLabRepositories(session.user.accessToken).catch(
+            () => []
+          ),
+        ]);
+
+        return [...githubRepos, ...gitlabRepos];
+      }
+
+      return [];
     } catch (error) {
       console.error("Error fetching repositories:", error);
-      throw error;
+      return []; // Retornar array vacío en lugar de lanzar error
     }
   }
 
-  private async fetchGitHubRepositories(token: string): Promise<GitHubRepository[]> {
+  private async fetchGitHubRepositories(
+    token: string
+  ): Promise<GitHubRepository[]> {
     try {
       const response = await fetch("https://api.github.com/user/repos", {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `token ${token}`, // Cambiado de Bearer a token
           Accept: "application/vnd.github+json",
         },
       });
 
       if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.statusText}`);
+        console.error(
+          `GitHub API error: ${response.status} - ${response.statusText}`
+        );
+        return [];
       }
 
       const data = await response.json();
-      return data.map((repo: any): GitHubRepository => ({
-        id: repo.id.toString(),
-        name: repo.name,
-        full_name: repo.full_name,
-        description: repo.description,
-        private: repo.private,
-        provider: "github",
-        owner: {
-          login: repo.owner.login,
-          avatar_url: repo.owner.avatar_url,
-        },
-        default_branch: repo.default_branch,
-      }));
+      return data.map(
+        (repo: any): GitHubRepository => ({
+          id: repo.id.toString(),
+          name: repo.name,
+          full_name: repo.full_name,
+          description: repo.description,
+          private: repo.private,
+          provider: "github",
+          owner: {
+            login: repo.owner.login,
+            avatar_url: repo.owner.avatar_url,
+          },
+          default_branch: repo.default_branch,
+        })
+      );
     } catch (error) {
       console.error("GitHub fetch error:", error);
       return [];
     }
   }
 
-  private async fetchGitLabRepositories(token: string): Promise<GitLabRepository[]> {
+  private async fetchGitLabRepositories(
+    token: string
+  ): Promise<GitLabRepository[]> {
     try {
-      const response = await fetch("https://gitlab.com/api/v4/projects?membership=true", {
+      console.log(
+        "Iniciando fetch de GitLab repos con token:",
+        token.slice(0, 10) + "..."
+      );
+
+      const url =
+        "https://gitlab.com/api/v4/projects?" +
+        new URLSearchParams({
+          membership: "true",
+          per_page: "100",
+          simple: "true",
+        }).toString();
+
+      console.log("URL de la petición:", url);
+
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
       });
 
+      console.log(
+        "Estado de la respuesta:",
+        response.status,
+        response.statusText
+      );
+
+      const responseText = await response.text();
+      console.log("Respuesta completa:", responseText);
+
       if (!response.ok) {
-        throw new Error(`GitLab API error: ${response.statusText}`);
+        console.error("Error en la respuesta de GitLab:", {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText,
+        });
+        return [];
       }
 
-      const data = await response.json();
-      return data.map((repo: any): GitLabRepository => ({
-        id: repo.id.toString(),
-        name: repo.name,
-        full_name: repo.path_with_namespace,
-        description: repo.description,
-        private: !repo.public,
-        provider: "gitlab",
-        namespace: {
-          name: repo.namespace.name,
-          avatar_url: repo.namespace.avatar_url,
-        },
-        default_branch: repo.default_branch,
-      }));
+      const data = JSON.parse(responseText);
+      console.log("Datos parseados:", data);
+
+      if (!Array.isArray(data)) {
+        console.error("GitLab API retornó formato inválido:", typeof data);
+        return [];
+      }
+
+      const mappedRepos = data.map((repo: any): GitLabRepository => {
+        console.log("Procesando repo:", {
+          id: repo.id,
+          name: repo.name,
+          path_with_namespace: repo.path_with_namespace,
+          visibility: repo.visibility,
+        });
+
+        return {
+          id: repo.id.toString(),
+          name: repo.name,
+          full_name: repo.path_with_namespace,
+          provider: "gitlab",
+          html_url: repo.web_url,
+          description: repo.description || "",
+          private: repo.visibility !== "public",
+          default_branch: repo.default_branch || "main",
+          owner: {
+            login: repo.namespace?.path || "",
+            avatar_url: repo.namespace?.avatar_url || "",
+          },
+          namespace: {
+            name: repo.namespace?.name || "",
+            avatar_url: repo.namespace?.avatar_url || "",
+          },
+        };
+      });
+
+      console.log("Repos procesados:", mappedRepos.length);
+      return mappedRepos;
     } catch (error) {
-      console.error("GitLab fetch error:", error);
+      console.error("Error detallado en GitLab fetch:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return [];
     }
   }

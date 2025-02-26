@@ -14,7 +14,7 @@ export class FileService {
 
   isImage(filename: string | undefined): boolean {
     if (!filename) return false;
-    
+
     const imageExtensions = [
       ".png",
       ".jpg",
@@ -28,16 +28,18 @@ export class FileService {
   }
 
   getImageUrl(repository: Repository, path: string): string {
-    if (!repository || !path) return '';
+    if (!repository || !path) return "";
     const branch = repository.default_branch || "main";
-    return `https://raw.githubusercontent.com/${repository.full_name}/${branch}/${encodeURIComponent(path)}`;
+    return `https://raw.githubusercontent.com/${
+      repository.full_name
+    }/${branch}/${encodeURIComponent(path)}`;
   }
 
   decodeContent(content: string, encoding: string = "utf-8"): string {
     if (encoding === "base64") {
       try {
         // Limpiamos el contenido base64 de posibles espacios o saltos de línea
-        const cleanContent = content.replace(/\s/g, '');
+        const cleanContent = content.replace(/\s/g, "");
         return Buffer.from(cleanContent, "base64").toString("utf-8");
       } catch (error) {
         console.error("Error decoding base64 content:", error);
@@ -50,34 +52,39 @@ export class FileService {
   processFileContent(content: string[], encoding?: string): string {
     try {
       // Si el contenido es un string JSON, intentamos parsearlo
-      if (content.length === 1 && content[0].startsWith('{')) {
+      if (content.length === 1 && typeof content[0] === "string") {
         try {
+          // Para GitLab
           const jsonContent = JSON.parse(content[0]);
-          if (jsonContent.content && jsonContent.encoding === 'base64') {
-            return this.decodeContent(jsonContent.content, 'base64');
+
+          // GitLab devuelve el contenido en la propiedad 'content'
+          if (jsonContent.content) {
+            if (jsonContent.encoding === "base64") {
+              return this.decodeContent(jsonContent.content, "base64");
+            }
+            return jsonContent.content;
           }
         } catch (e) {
-          // Si no se puede parsear como JSON, continuamos con el proceso normal
-          console.log('No es un JSON válido, procesando como contenido normal');
+          console.log("No es un JSON válido o no tiene el formato esperado");
         }
       }
 
-      // Proceso normal para contenido base64 o texto plano
+      // Si es contenido base64 directo
       if (encoding === "base64") {
-        const joinedBase64 = content.join("");
-        return Buffer.from(joinedBase64, 'base64').toString('utf-8');
+        return this.decodeContent(content.join(""), "base64");
       }
-      
+
+      // Si es contenido plano
       return content.join("\n");
     } catch (error) {
-      console.error('Error processing file content:', error);
+      console.error("Error processing file content:", error);
       return String(content);
     }
   }
 
   isBinary(filename: string | undefined): boolean {
     if (!filename) return false;
-    
+
     const binaryExtensions = [".pdf", ".zip", ".exe", ".dll"];
     return binaryExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
   }
@@ -89,12 +96,24 @@ export class FileService {
     return "file";
   }
 
-  getRawUrl(repository: Repository | undefined, path: string | undefined, branch: string = "master"): string {
-    if (!repository || !path) return '';
+  getRawUrl(
+    repository: Repository | undefined,
+    path: string | undefined,
+    branch: string = "master"
+  ): string {
+    if (!repository || !path) return "";
+    if (repository.provider === "gitlab") {
+      return `https://gitlab.com/api/v4/projects/${
+        repository.id
+      }/repository/files/${encodeURIComponent(path)}/raw`;
+    }
     return `https://raw.githubusercontent.com/${repository.full_name}/${branch}/${path}`;
   }
 
-  async processFile(file: any, repository: Repository): Promise<RepositoryFile> {
+  async processFile(
+    file: any,
+    repository: Repository
+  ): Promise<RepositoryFile> {
     if (!file) {
       throw new Error("File is required");
     }
@@ -117,7 +136,10 @@ export class FileService {
       type: fileType,
       content: content || undefined,
       url: file.html_url,
-      raw_url: fileType === "image" ? this.getRawUrl(repository, file.path) : undefined,
+      raw_url:
+        fileType === "image"
+          ? this.getRawUrl(repository, file.path)
+          : undefined,
       encoding: file.encoding,
       size: file.size,
     };

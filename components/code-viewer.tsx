@@ -2,7 +2,15 @@
 
 import { useRepository } from "@/contexts/repository-context";
 import { FileService } from "@/services/file-service";
-import { Check, Copy, Download, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -12,7 +20,8 @@ import remarkGfm from "remark-gfm";
 import { FileTree } from "./file-tree";
 
 export function CodeViewer() {
-  const { selectedRepo, currentPath, fileContent, currentFile } = useRepository();
+  const { selectedRepo, currentPath, fileContent, currentFile } =
+    useRepository();
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -53,67 +62,98 @@ export function CodeViewer() {
       );
     }
 
-    // Process content and ensure it's a string
-    const content = fileService.processFileContent(fileContent, currentFile?.encoding);
-    const stringContent = typeof content === 'string' ? content : String(content);
+    let processedContent;
+    try {
+      // Procesar el contenido usando el FileService
+      processedContent = fileService.processFileContent(
+        fileContent,
+        currentFile?.encoding
+      );
 
-    if (currentPath && fileService.isImage(currentPath)) {
+      // Log para debugging
+      console.log("Content processed:", {
+        original: fileContent,
+        processed: processedContent,
+        encoding: currentFile?.encoding,
+        provider: selectedRepo?.provider,
+      });
+
+      if (currentPath && fileService.isImage(currentPath)) {
+        const imageUrl =
+          selectedRepo?.provider === "gitlab"
+            ? fileService.getRawUrl(selectedRepo, currentPath)
+            : `https://raw.githubusercontent.com/${selectedRepo?.full_name}/master/${currentPath}`;
+
+        return (
+          <div className="flex items-center justify-center h-full p-4">
+            <img
+              src={imageUrl}
+              alt={currentPath.split("/").pop() || ""}
+              className="max-w-full max-h-full object-contain"
+            />
+          </div>
+        );
+      }
+
+      if (currentPath?.toLowerCase().endsWith(".md")) {
+        return (
+          <div className="p-8 prose prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {processedContent}
+            </ReactMarkdown>
+          </div>
+        );
+      }
+
+      const language = currentPath?.split(".").pop() || "text";
+
       return (
-        <div className="flex items-center justify-center h-full p-4">
-          <img
-            src={fileContent[0]}
-            alt={currentPath.split("/").pop() || ""}
-            className="max-w-full max-h-full object-contain"
-          />
+        <div className="w-full h-full overflow-auto scrollbar-custom">
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            showLineNumbers
+            customStyle={{
+              margin: 0,
+              background: "#0d1117",
+              padding: "1rem",
+            }}
+            lineNumberStyle={{
+              minWidth: "3em",
+              paddingRight: "1em",
+              color: "#484f58",
+              textAlign: "right",
+              userSelect: "none",
+              borderRight: "1px solid #30363d",
+            }}
+            className="min-h-full"
+            wrapLines
+            wrapLongLines
+            lineProps={{
+              style: { display: "block" },
+              className: "hover:bg-[#1c2128] px-4 transition-colors",
+            }}
+          >
+            {processedContent}
+          </SyntaxHighlighter>
+        </div>
+      );
+    } catch (error) {
+      console.error("Error rendering content:", error);
+      return (
+        <div className="flex items-center justify-center h-full text-red-400">
+          Error processing file content
         </div>
       );
     }
-
-    if (currentPath?.toLowerCase().endsWith(".md")) {
-      return (
-        <div className="p-8 prose prose-invert max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{stringContent}</ReactMarkdown>
-        </div>
-      );
-    }
-
-    const language = currentPath?.split(".").pop() || "text";
-
-    return (
-      <div className="w-full h-full overflow-auto scrollbar-custom">
-        <SyntaxHighlighter
-          language={language}
-          style={oneDark}
-          showLineNumbers
-          customStyle={{
-            margin: 0,
-            background: "#0d1117",
-            padding: "1rem",
-          }}
-          lineNumberStyle={{
-            minWidth: "3em",
-            paddingRight: "1em",
-            color: "#484f58",
-            textAlign: "right",
-            userSelect: "none",
-            borderRight: "1px solid #30363d",
-          }}
-          className="min-h-full"
-          wrapLines
-          wrapLongLines
-          lineProps={{
-            style: { display: "block" },
-            className: "hover:bg-[#1c2128] px-4 transition-colors",
-          }}
-        >
-          {stringContent}
-        </SyntaxHighlighter>
-      </div>
-    );
   };
 
   return (
-    <div className={`flex h-full ${isFullscreen ? "fixed inset-0 z-50 bg-[#0d1117]" : ""}`}>
+    <div
+      className={`flex h-full ${
+        isFullscreen ? "fixed inset-0 z-50 bg-[#0d1117]" : ""
+      }`}
+    >
       {/* Sidebar */}
       <div
         className={`border-r border-[#30363d] bg-[#0d1117] overflow-hidden transition-all duration-300 ${
@@ -134,9 +174,15 @@ export function CodeViewer() {
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
               >
-                {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                {isSidebarOpen ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeftOpen className="h-4 w-4" />
+                )}
               </button>
-              <span className="text-sm text-gray-300">{currentPath.split("/").pop()}</span>
+              <span className="text-sm text-gray-300">
+                {currentPath.split("/").pop()}
+              </span>
               <span className="text-xs text-gray-500">
                 {fileContent.length} lines ({getFileSize()})
               </span>
@@ -147,14 +193,22 @@ export function CodeViewer() {
                 className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
                 title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               >
-                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </button>
               <button
                 onClick={handleCopy}
                 className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
                 title="Copy code"
               >
-                {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-400" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </button>
               <button
                 onClick={handleDownload}

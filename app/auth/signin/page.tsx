@@ -1,8 +1,7 @@
 "use client";
 
+import { Bot, Github, Gitlab } from "lucide-react";
 import { signIn } from "next-auth/react";
-import { Bot, Github, Share2 } from "lucide-react";
-import Image from "next/image";
 
 export default function SignIn() {
   return (
@@ -27,7 +26,7 @@ export default function SignIn() {
               onClick={() => signIn("gitlab", { callbackUrl: "/" })}
               className="w-full flex items-center justify-center gap-3 bg-[#fc6d26] text-white px-4 py-3 rounded-lg hover:bg-[#e24329] transition-colors"
             >
-              <Share2 className="h-5 w-5" />
+              <Gitlab className="h-5 w-5" />
               Sign in with GitLab
             </button>
           </div>
