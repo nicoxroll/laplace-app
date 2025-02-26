@@ -1,24 +1,13 @@
 "use client";
 
+import { Message } from "@/types/chat";
+import { Box, Typography } from "@mui/material";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
-
-interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-  context?: {
-    repository?: {
-      full_name: string;
-    };
-    currentFile?: {
-      path: string;
-    };
-  };
-}
 
 export function MessageRenderer({ message }: { message: Message }) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -30,24 +19,45 @@ export function MessageRenderer({ message }: { message: Message }) {
   };
 
   return (
-    <div
-      className={`p-4 rounded-lg ${
-        message.role === "user"
-          ? "bg-[#1f6feb] text-white ml-8"
-          : "bg-[#161b22] text-gray-200 mr-8 border border-[#30363d]"
-      }`}
+    <Box
+      sx={{
+        p: 2,
+        borderRadius: 1,
+        bgcolor: message.role === "user" ? "#1f6feb" : "#161b22",
+        ml: message.role === "user" ? 6 : 0,
+        mr: message.role === "assistant" ? 6 : 0,
+      }}
     >
       {message.role === "assistant" && message.context && (
-        <div className="text-xs text-gray-400 mb-2 flex flex-col gap-1">
-          {message.context.repository && (
-            <div>Repository: {message.context.repository.full_name}</div>
-          )}
+        <Box sx={{ mb: 1, fontSize: 12, color: "text.secondary" }}>
+          <Box>Repository: {message.context.repository?.full_name}</Box>
           {message.context.currentFile && (
-            <div>Current File: {message.context.currentFile.path}</div>
+            <Box>Current File: {message.context.currentFile.path}</Box>
           )}
-        </div>
+        </Box>
       )}
-      <div className="prose prose-invert max-w-none">
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.primary",
+          "& code": {
+            p: "2px 6px",
+            borderRadius: 1,
+            color: "text.primary",
+            fontFamily: "monospace",
+            textDecoration: "none",  // Agregar esto para quitar el subrayado
+          },
+          "& pre": {
+            textDecoration: "none",  // Agregar esto para quitar el subrayado en bloques de código
+          },
+          "& a": {
+            textDecoration: "none",  // Base sin subrayado
+            "&:hover": {
+              textDecoration: "underline", // Subrayado solo al hover para links
+            }
+          }
+        }}
+      >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -72,13 +82,29 @@ export function MessageRenderer({ message }: { message: Message }) {
                   </div>
                   <div className="max-h-[400px] overflow-auto scrollbar-custom">
                     <SyntaxHighlighter
-                      style={oneDark}
                       language={match[1]}
-                      PreTag="div"
+                      style={oneDark}
+                      showLineNumbers
                       customStyle={{
                         margin: 0,
                         background: "#0d1117",
-                        padding: "2rem 1rem 1rem 1rem",
+                        padding: "1rem",
+                        minWidth: "100%",
+                        display: "inline-block",
+                      }}
+                      lineNumberStyle={{
+                        minWidth: "3em",
+                        paddingRight: "1em",
+                        color: "#484f58",
+                        textAlign: "right",
+                        userSelect: "none",
+                        borderRight: "1px solid #30363d",
+                      }}
+                      wrapLines
+                      wrapLongLines={false}
+                      lineProps={{
+                        style: { display: "block", whiteSpace: "pre" },
+                        className: "hover:bg-[#1c2128] px-4 transition-colors",
                       }}
                       {...props}
                     >
@@ -89,6 +115,7 @@ export function MessageRenderer({ message }: { message: Message }) {
               ) : (
                 <code
                   className="bg-[#2d333b] px-2 py-1 rounded text-gray-200"
+                  style={{ textDecoration: "none" }}  // Agregar esto para código inline
                   {...props}
                 >
                   {children}
@@ -139,7 +166,7 @@ export function MessageRenderer({ message }: { message: Message }) {
         >
           {message.content}
         </ReactMarkdown>
-      </div>
-    </div>
+      </Typography>
+    </Box>
   );
 }

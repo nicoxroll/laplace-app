@@ -39,8 +39,19 @@ export class FileService {
     if (encoding === "base64") {
       try {
         // Limpiamos el contenido base64 de posibles espacios o saltos de línea
-        const cleanContent = content.replace(/\s/g, "");
-        return Buffer.from(cleanContent, "base64").toString("utf-8");
+        const cleanContent = content.replace(/[\n\r\s]/g, "");
+        
+        // Decodificamos el contenido
+        const decoded = Buffer.from(cleanContent, "base64").toString("utf-8");
+        
+        // Verificamos si el contenido decodificado es JSON
+        try {
+          const jsonContent = JSON.parse(decoded);
+          return JSON.stringify(jsonContent, null, 2);
+        } catch {
+          // Si no es JSON, retornamos el contenido decodificado directamente
+          return decoded;
+        }
       } catch (error) {
         console.error("Error decoding base64 content:", error);
         return "Error decoding file content";
@@ -49,36 +60,38 @@ export class FileService {
     return content;
   }
 
-  processFileContent(content: string[], encoding?: string): string {
+  processFileContent(content: any, encoding?: string): string {
     try {
-      // Si el contenido es un string JSON, intentamos parsearlo
-      if (content.length === 1 && typeof content[0] === "string") {
-        try {
-          // Para GitLab
-          const jsonContent = JSON.parse(content[0]);
+      // Si es un array, lo unimos con saltos de línea
+      if (Array.isArray(content)) {
+        return content.join("\n");
+      }
 
-          // GitLab devuelve el contenido en la propiedad 'content'
-          if (jsonContent.content) {
-            if (jsonContent.encoding === "base64") {
-              return this.decodeContent(jsonContent.content, "base64");
-            }
-            return jsonContent.content;
-          }
-        } catch (e) {
-          console.log("No es un JSON válido o no tiene el formato esperado");
+      // Si es un string directo, lo retornamos
+      if (typeof content === "string") {
+        return content;
+      }
+
+      // Si es un objeto (respuesta de GitHub/GitLab)
+      if (typeof content === "object") {
+        // Caso GitHub
+        if (content.content && content.encoding === "base64") {
+          return this.decodeContent(content.content, "base64");
         }
+
+        // Si tenemos un objeto con contenido directo
+        if (content.content) {
+          return content.content;
+        }
+
+        // Si el objeto completo es el contenido
+        return JSON.stringify(content, null, 2);
       }
 
-      // Si es contenido base64 directo
-      if (encoding === "base64") {
-        return this.decodeContent(content.join(""), "base64");
-      }
-
-      // Si es contenido plano
-      return content.join("\n");
+      return String(content);
     } catch (error) {
       console.error("Error processing file content:", error);
-      return String(content);
+      return "Error processing file content";
     }
   }
 
@@ -114,34 +127,17 @@ export class FileService {
     file: any,
     repository: Repository
   ): Promise<RepositoryFile> {
-    if (!file) {
-      throw new Error("File is required");
-    }
-
-    const fileType = this.getFileType(file.name);
-    let content = "";
-
-    if (file.content && file.encoding === "base64" && fileType === "file") {
-      try {
-        content = this.decodeContent(file.content, file.encoding);
-      } catch (error) {
-        console.error("Error processing file content:", error);
-        content = "Error processing file content";
-      }
-    }
-
+    const processedContent = this.processFileContent(file.content, file.encoding);
+    
     return {
-      name: file.name || "",
-      path: file.path || "",
-      type: fileType,
-      content: content || undefined,
-      url: file.html_url,
-      raw_url:
-        fileType === "image"
-          ? this.getRawUrl(repository, file.path)
-          : undefined,
-      encoding: file.encoding,
+      name: file.name,
+      path: file.path,
+      sha: file.sha,
       size: file.size,
+      url: file.url,
+      content: processedContent,
+      encoding: file.encoding,
+      type: this.getFileType(file.path),
     };
   }
 }

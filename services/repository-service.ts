@@ -406,18 +406,45 @@ export class RepositoryService {
           }));
         }
       } else {
-        // Existing GitHub code
         const [owner, repo] = repository.full_name.split("/");
-        const response = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        try {
+          // Primero verificamos si el repositorio está vacío
+          const repoInfo = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github.v3+json",
+              },
+            }
+          );
 
-        if (response.ok) {
+          const repoData = await repoInfo.json();
+          
+          if (repoData.size === 0) {
+            console.log("Repository is empty");
+            return [];
+          }
+
+          const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github.v3+json",
+              },
+            }
+          );
+
+          if (response.status === 409 || response.status === 404) {
+            console.log("Branch does not exist or repository is empty");
+            return [];
+          }
+
+          if (!response.ok) {
+            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+          }
+
           const data = await response.json();
           return data.map((commit: any) => ({
             sha: commit.sha,
@@ -427,11 +454,14 @@ export class RepositoryService {
               date: commit.commit.author.date,
             },
           }));
+        } catch (error) {
+          console.error("Error fetching commits:", error);
+          return [];
         }
       }
       return [];
     } catch (error) {
-      console.error("Error fetching commits:", error);
+      console.error("Error in fetchCommits:", error);
       return [];
     }
   }

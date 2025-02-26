@@ -1,5 +1,6 @@
 import { ChatInputProps } from "@/types/chat";
 import { Send, StopCircle } from "lucide-react";
+import { Box } from "@mui/material";
 
 export function ChatInput({
   input,
@@ -9,35 +10,90 @@ export function ChatInput({
   onStop,
 }: ChatInputProps) {
   return (
-    <form onSubmit={onSubmit} className="p-4 border-t border-[#30363d]">
-      <div className="relative">
-        <input
+    <Box
+      component="form"
+      onSubmit={onSubmit}
+      sx={{
+        p: 2,
+        borderTop: 1,
+        borderColor: "#30363d",
+        bgcolor: "#161b22",
+      }}
+    >
+      <Box sx={{ position: "relative" }}>
+        <Box
+          component="input"
           type="text"
           value={input}
           onChange={onInputChange}
           placeholder="Ask about the repository..."
-          className="w-full p-2 pr-24 bg-[#161b22] text-gray-200 rounded-lg border border-[#30363d] focus:outline-none focus:border-blue-500"
           disabled={loading}
+          sx={{
+            width: "100%",
+            p: 2,
+            pr: 8,
+            bgcolor: "#0d1117",
+            color: "text.primary",
+            border: 1,
+            borderColor: "#30363d",
+            borderRadius: 1,
+            "&:focus": {
+              outline: "none",
+              borderColor: "#1f6feb",
+            },
+            "&::placeholder": {
+              color: "text.secondary",
+            },
+          }}
         />
-        <div className="absolute right-2 top-2 flex items-center gap-2">
+        <Box
+          sx={{
+            position: "absolute",
+            right: 2,
+            top: "50%",
+            transform: "translateY(-50%)",
+            display: "flex",
+            gap: 1,
+          }}
+        >
           {loading && (
-            <button
+            <Box
+              component="button"
               type="button"
               onClick={onStop}
-              className="p-1 text-gray-400 hover:text-gray-300"
+              sx={{
+                p: 1,
+                color: "text.secondary",
+                "&:hover": { color: "text.primary" },
+                cursor: "pointer",
+                bgcolor: "transparent",
+                border: "none",
+              }}
             >
               <StopCircle className="h-4 w-4" />
-            </button>
+            </Box>
           )}
-          <button
+          <Box
+            component="button"
             type="submit"
             disabled={loading || !input.trim()}
-            className="p-1 text-gray-400 hover:text-gray-300 disabled:opacity-50"
+            sx={{
+              p: 1,
+              color: "text.secondary",
+              "&:hover": { color: "text.primary" },
+              cursor: "pointer",
+              bgcolor: "transparent",
+              border: "none",
+              "&:disabled": {
+                opacity: 0.5,
+                cursor: "not-allowed",
+              },
+            }}
           >
             <Send className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </form>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 }

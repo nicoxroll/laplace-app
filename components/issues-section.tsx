@@ -178,9 +178,7 @@ export function IssuesSection({ repository }: { repository: Repository }) {
         </div>
 
         {filteredIssues.length === 0 ? (
-          <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-            <p className="text-gray-400">No se encontraron issues</p>
-          </div>
+          <p className="text-gray-400">No se encontraron issues</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">

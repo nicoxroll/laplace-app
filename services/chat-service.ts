@@ -1,8 +1,11 @@
-import type { Message } from "@/types/chat";
+import { Octokit } from "octokit";
+import { CodeIndexer } from "./code-indexer";
 import type { RepositoryContext } from "@/types/repository";
+import type { Message } from "@/types/chat";
 
 export class ChatService {
   private static instance: ChatService;
+  private codeIndexer: CodeIndexer | null = null;
 
   private constructor() {}
 
@@ -14,23 +17,84 @@ export class ChatService {
   }
 
   formatRepoContext(context: RepositoryContext): string {
-    const sections = [
-      `# Repository Analysis Context`,
-      `Provider: ${context.provider}`,
-      `Repository: ${context.repository.full_name}`,
-      `Current Path: ${context.currentPath}`,
-    ];
-
-    if (context.currentFile) {
-      sections.push(
-        `\n## Current File: ${context.currentFile.path}`,
-        "```" + (context.currentFile.language || "plaintext"),
-        context.currentFile.content.join("\n"),
-        "```"
-      );
+    let formattedContext = `You are analyzing a ${context.provider} repository: ${context.repository.full_name}\n`;
+    
+    if (this.codeIndexer?.codebase) {
+      formattedContext += "\nRepository structure and contents:\n";
+      
+      // Procesar solo los archivos más relevantes para el contexto actual
+      const relevantFiles = this.getRelevantFiles(context.currentPath, this.codeIndexer.codebase);
+      
+      for (const [path, content] of Object.entries(relevantFiles)) {
+        formattedContext += `\nFile: ${path}\nContent:\n${this.truncateContent(content)}\n`;
+      }
     }
 
-    return sections.join("\n");
+    if (context.currentPath) {
+      formattedContext += `\nCurrently focused on path: ${context.currentPath}`;
+    }
+
+    if (context.currentFile) {
+      formattedContext += `\nCurrent file content:\n${context.currentFile.content}`;
+    }
+
+    return formattedContext;
+  }
+
+  private getRelevantFiles(currentPath: string, codebase: Record<string, string>): Record<string, string> {
+    const relevantFiles: Record<string, string> = {};
+    const maxFiles = 10;
+    let count = 0;
+
+    // Primero agregar el archivo actual y sus hermanos
+    const currentDir = currentPath.split('/').slice(0, -1).join('/');
+    
+    for (const [path, content] of Object.entries(codebase)) {
+      if (count >= maxFiles) break;
+
+      // Priorizar archivos en el mismo directorio
+      if (path.startsWith(currentDir)) {
+        relevantFiles[path] = content;
+        count++;
+      }
+    }
+
+    // Si aún hay espacio, agregar otros archivos importantes
+    for (const [path, content] of Object.entries(codebase)) {
+      if (count >= maxFiles) break;
+      if (!relevantFiles[path]) {
+        relevantFiles[path] = content;
+        count++;
+      }
+    }
+
+    return relevantFiles;
+  }
+
+  private truncateContent(content: string, maxLength: number = 1000): string {
+    if (content.length <= maxLength) return content;
+    
+    const lines = content.split('\n');
+    if (lines.length > 50) {
+      const important = [
+        ...lines.slice(0, 20),
+        '...',
+        ...lines.slice(lines.length - 20)
+      ];
+      return important.join('\n');
+    }
+    
+    return content.slice(0, maxLength) + '...';
+  }
+
+  async initializeCodeIndexer(token: string, repoFullName: string) {
+    this.codeIndexer = new CodeIndexer(token);
+    try {
+      const codebase = await this.codeIndexer.indexRepository(repoFullName);
+      this.codeIndexer.codebase = codebase;
+    } catch (error) {
+      console.error("Error indexing repository:", error);
+    }
   }
 
   async streamResponse(

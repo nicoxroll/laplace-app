@@ -6,32 +6,51 @@ import { FloatingChat } from "@/components/floating-chat";
 import { Header } from "@/components/header";
 import { InsightsSection } from "@/components/insights-section";
 import { IssuesSection } from "@/components/issues-section";
+import { LoadingScreen } from "@/components/loading-screen";
 import { PullRequestsSection } from "@/components/pull-requests-section";
 import { RepositoryList } from "@/components/repository-list";
 import { SecuritySection } from "@/components/security-section";
 import { useRepository } from "@/contexts/repository-context";
+import { Box } from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function HomePage() {
-  const router = useRouter();
-  const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      router.push("/auth/signin");
-    },
-  });
-
   const { selectedRepo } = useRepository();
   const [activeSection, setActiveSection] = useState("code");
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [showSidebar, setShowSidebar] = useState(true);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/signin");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return <LoadingScreen />;
+  }
+
+  if (!session) {
+    return null;
+  }
 
   const renderSection = () => {
     if (!selectedRepo) {
       return (
-        <div className="flex items-center justify-center h-full text-gray-400">
-          <p>Select a repository to get started</p>
-        </div>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            color: "text.secondary",
+          }}
+        >
+          Select a repository to get started
+        </Box>
       );
     }
 
@@ -40,7 +59,7 @@ export default function HomePage() {
         return <CodeSection repository={selectedRepo} />;
       case "issues":
         return <IssuesSection repository={selectedRepo} />;
-      case "pullRequests":
+      case "pull-requests":
         return <PullRequestsSection repository={selectedRepo} />;
       case "security":
         return <SecuritySection repository={selectedRepo} />;
@@ -54,20 +73,53 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117]">
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+      }}
+    >
       <Header
         activeSection={activeSection}
         onSectionChange={setActiveSection}
+        showSidebar={showSidebar}
+        onToggleSidebar={() => setShowSidebar(!showSidebar)}
       />
-      <div className="flex h-[calc(100vh-4rem)]">
-        <div className="w-64 border-r border-[#30363d]">
-          <RepositoryList />
-        </div>
-        <main className="flex-1 p-6 overflow-auto">
-          <div className="max-w-6xl mx-auto">{renderSection()}</div>
-        </main>
-        <FloatingChat />
-      </div>
-    </div>
+      <Box
+        sx={{
+          display: "flex",
+          flexGrow: 1,
+          pt: "64px", // Altura del AppBar
+          overflow: "hidden",
+        }}
+      >
+        {showSidebar && (
+          <Box
+            sx={{
+              width: 300,
+              flexShrink: 0,
+              borderRight: 1,
+              borderColor: "divider",
+              bgcolor: "background.paper",
+              overflow: "auto",
+            }}
+          >
+            <RepositoryList />
+          </Box>
+        )}
+        <Box
+          sx={{
+            flexGrow: 1,
+            p: 3,
+            overflow: "auto",
+          }}
+        >
+          {renderSection()}
+        </Box>
+      </Box>
+      <FloatingChat />
+    </Box>
   );
 }

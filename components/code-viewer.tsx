@@ -6,18 +6,28 @@ import { RepositoryService } from "@/services/repository-service";
 import type { Branch, Commit } from "@/types/repository";
 import {
   Archive,
-  BookOpen,
   Check,
   Copy,
   Download,
-  GitBranch,
-  History,
-  Loader2,
   Maximize2,
   Minimize2,
-  PanelLeftClose,
-  PanelLeftOpen,
+  History,
+  Menu,
+  FileCode,
+  GitBranch,
+  Loader2
 } from "lucide-react";
+import {
+  AppBar,
+  Box,
+  Button,
+  Drawer,
+  IconButton,
+  MenuItem,
+  Paper,
+  Toolbar,
+  Typography,
+} from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -256,168 +266,327 @@ export function CodeViewer() {
     setIsCommitsOpen(false);
   };
 
-  return (
-    <div
-      className={`flex flex-col h-full ${
-        isFullscreen ? "fixed inset-0 z-50 bg-[#0d1117]" : ""
-      }`}
-    >
-      {/* Repository Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#161b22] border-b border-[#30363d]">
-        <div className="flex items-center gap-4">
-          <BookOpen className="h-5 w-5 text-gray-400" />
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-gray-300">
-              {selectedRepo?.owner?.login}
-            </span>
-            <span className="text-gray-400">/</span>
-            <span className="text-sm font-medium text-gray-300">
-              {selectedRepo?.name}
-            </span>
-          </div>
-        </div>
+  // Agregar handlers para cerrar dropdowns al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isBranchesOpen || isCommitsOpen) {
+        const target = event.target as HTMLElement;
+        if (
+          !target.closest('[data-dropdown="branch"]') &&
+          !target.closest('[data-dropdown="commits"]')
+        ) {
+          setIsBranchesOpen(false);
+          setIsCommitsOpen(false);
+        }
+      }
+    };
 
-        <div className="flex items-center gap-4">
-          {/* Branch Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setIsBranchesOpen(!isBranchesOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[#30363d] border border-[#30363d] text-gray-300"
-            >
-              <GitBranch className="h-4 w-4" />
-              <span className="text-sm">{selectedBranch}</span>
-            </button>
-            {isBranchesOpen && (
-              <div className="absolute top-full left-0 mt-1 w-64 max-h-64 overflow-y-auto bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg z-10">
-                {branches.map((branch) => (
-                  <button
-                    key={branch.name}
-                    onClick={() => handleBranchChange(branch)}
-                    className={`w-full px-4 py-2 text-left text-sm hover:bg-[#30363d] ${
-                      selectedBranch === branch.name ? "bg-[#1c2128]" : ""
-                    }`}
-                  >
-                    <span className="text-gray-300">{branch.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isBranchesOpen, isCommitsOpen]);
 
-          {/* Commits History */}
-          <div className="relative">
-            <button
-              onClick={() => setIsCommitsOpen(!isCommitsOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[#30363d] border border-[#30363d] text-gray-300"
-            >
-              <History className="h-4 w-4" />
-              <span className="text-sm">History</span>
-            </button>
+  const renderFileInfo = () => {
+    if (!currentPath || !fileContent) return null;
 
-            {isCommitsOpen && (
-              <div className="absolute top-full right-0 mt-1 w-96 max-h-[32rem] overflow-y-auto bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg z-10">
-                {commits.map((commit) => (
-                  <button
-                    key={commit.sha}
-                    onClick={() => handleCommitSelect(commit)}
-                    className="w-full px-4 py-3 text-left border-b border-[#30363d] hover:bg-[#1c2128] last:border-0"
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm text-gray-300 font-medium truncate">
-                        {commit.message}
-                      </span>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Archive className="h-3 w-3" />
-                        <span>{commit.sha.slice(0, 7)}</span>
-                        <span>•</span>
-                        <span>{commit.author.name}</span>
-                        <span>•</span>
-                        <span>
-                          {new Date(commit.author.date).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+    // Asegurarnos de que fileContent sea un string
+    const contentString = Array.isArray(fileContent) ? fileContent.join('\n') : fileContent;
+    const lines = contentString.split('\n').length;
+    const bytes = new TextEncoder().encode(contentString).length;
+    const formattedSize = bytes < 1024 
+      ? `${bytes} B` 
+      : `${(bytes / 1024).toFixed(1)} KB`;
 
-      {/* Existing Content */}
-      <div className="flex flex-1 overflow-hidden">
-        <div
-          className={`border-r border-[#30363d] bg-[#0d1117] overflow-hidden transition-all duration-300 ${
-            isSidebarOpen ? "w-64" : "w-0"
-          }`}
+    return (
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          color: "text.secondary",
+          display: "flex",
+          alignItems: "center",
+          gap: 1
+        }}
+      >
+        {currentPath} • {lines} lines • {formattedSize}
+      </Typography>
+    );
+  };
+
+  // Para el selector de branches
+  const renderBranchSelector = () => {
+    return (
+      <Box sx={{ position: "relative" }} data-dropdown="branch">
+        <Button
+          onClick={() => {
+            setIsBranchesOpen(!isBranchesOpen);
+            setIsCommitsOpen(false);
+          }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            px: 2,
+            py: 0.75,
+            borderRadius: 1,
+            border: 1,
+            borderColor: "#30363d",
+            color: "text.primary",
+            bgcolor: "transparent",
+            "&:hover": { bgcolor: "#30363d" },
+          }}
         >
-          <div className="h-full overflow-auto scrollbar-custom">
-            <FileTree />
-          </div>
-        </div>
+          <GitBranch sx={{ fontSize: 18 }} />
+          <Typography variant="body2">
+            {branches.length > 0 ? currentBranch || selectedRepo?.default_branch : "Sin branches"}
+          </Typography>
+        </Button>
+        {isBranchesOpen && (
+          <Paper
+            sx={{
+              position: "absolute",
+              top: "100%",
+              right: 0,
+              mt: 1,
+              width: 300,
+              maxHeight: 400,
+              overflow: "auto",
+              bgcolor: "#161b22",
+              border: 1,
+              borderColor: "#30363d",
+              borderRadius: 1,
+              zIndex: 1100,
+            }}
+          >
+            {branches.length > 0 ? (
+              branches.map((branch) => (
+                <MenuItem
+                  key={branch.name}
+                  onClick={() => handleBranchChange(branch)}
+                  sx={{
+                    py: 1.5,
+                    px: 2,
+                    color: "text.primary",
+                    bgcolor: currentBranch === branch.name ? "#1c2128" : "transparent",
+                    "&:hover": { bgcolor: "#30363d" },
+                  }}
+                >
+                  <Typography variant="body2">{branch.name}</Typography>
+                </MenuItem>
+              ))
+            ) : (
+              <MenuItem
+                disabled
+                sx={{
+                  py: 1.5,
+                  px: 2,
+                  color: "text.secondary",
+                  "&.Mui-disabled": {
+                    opacity: 1,
+                  },
+                }}
+              >
+                Repositorio sin branches
+              </MenuItem>
+            )}
+          </Paper>
+        )}
+      </Box>
+    );
+  };
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {fileContent.length > 0 && (
-            <div className="h-[41px] flex items-center justify-between px-4 bg-[#161b22] border-b border-[#30363d]">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
-                >
-                  {isSidebarOpen ? (
-                    <PanelLeftClose className="h-4 w-4" />
-                  ) : (
-                    <PanelLeftOpen className="h-4 w-4" />
-                  )}
-                </button>
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }}>
+      <AppBar position="static" color="transparent" elevation={0}>
+        <Toolbar sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <IconButton
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              size="small"
+              sx={{
+                color: "text.secondary",
+                "&:hover": { bgcolor: "#30363d" },
+              }}
+            >
+              <Menu size={16} /> {/* Reemplaza MenuIcon */}
+            </IconButton>
 
-                <span className="text-sm text-gray-300">
-                  {currentPath.split("/").pop()}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {fileContent.length} lines ({getFileSize()})
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
-                  title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                >
-                  {isFullscreen ? (
-                    <Minimize2 className="h-4 w-4" />
-                  ) : (
-                    <Maximize2 className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  onClick={handleCopy}
-                  className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
-                  title="Copy code"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-400" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  onClick={handleDownload}
-                  className="p-1.5 rounded hover:bg-[#30363d] text-gray-400"
-                  title="Download"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              {selectedRepo && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <FileCode size={16} /> {/* Reemplaza Source */}
+                  <Typography variant="body2" sx={{ color: "text.primary" }}>
+                    {selectedRepo.name}
+                  </Typography>
+                </Box>
+              )}
+              {renderFileInfo()}
+            </Box>
+          </Box>
+          
+          <Box
+            sx={{ display: "flex", alignItems: "center", gap: 2, ml: "auto" }}
+          >
+            {/* Branch Selector */}
+            {renderBranchSelector()}
 
-          <div className="flex-1 overflow-auto scrollbar-custom">
-            {renderContent()}
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* History */}
+            <Box sx={{ position: "relative" }} data-dropdown="commits">
+              <Button
+                onClick={() => {
+                  setIsCommitsOpen(!isCommitsOpen);
+                  setIsBranchesOpen(false);
+                }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  px: 2,
+                  py: 0.75,
+                  borderRadius: 1,
+                  border: 1,
+                  borderColor: "#30363d",
+                  color: "text.primary",
+                  bgcolor: "transparent",
+                  "&:hover": { bgcolor: "#30363d" },
+                }}
+              >
+                <History sx={{ fontSize: 18 }} />
+                <Typography variant="body2">
+                  {commits.length > 0 ? "History" : "No commits"}
+                </Typography>
+              </Button>
+              {isCommitsOpen && (
+                <Paper
+                  sx={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    mt: 1,
+                    width: 300,
+                    maxHeight: 400,
+                    overflow: "auto",
+                    bgcolor: "#161b22",
+                    border: 1,
+                    borderColor: "#30363d",
+                    borderRadius: 1,
+                    zIndex: 1100,
+                  }}
+                >
+                  {commits.length > 0 ? (
+                    commits.map((commit) => (
+                      <MenuItem
+                        key={commit.sha}
+                        onClick={() => handleCommitSelect(commit)}
+                        sx={{
+                          py: 1.5,
+                          px: 2,
+                          color: "text.primary",
+                          bgcolor: currentCommit === commit.sha ? "#1c2128" : "transparent",
+                          "&:hover": { bgcolor: "#30363d" },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                          <Typography variant="body2" sx={{ color: "text.primary" }}>
+                            {commit.message}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                            {commit.author.name} • {new Date(commit.author.date).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  ) : (
+                    <MenuItem
+                      disabled
+                      sx={{
+                        py: 1.5,
+                        px: 2,
+                        color: "text.secondary",
+                        "&.Mui-disabled": {
+                          opacity: 1,
+                        },
+                      }}
+                    >
+                      No commits found in this repository
+                    </MenuItem>
+                  )}
+                </Paper>
+              )}
+            </Box>
+
+            {/* Action buttons */}
+            <IconButton
+              size="small"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              sx={{
+                color: "text.secondary",
+                "&:hover": { bgcolor: "#30363d" },
+              }}
+            >
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />} {/* Reemplaza Fullscreen y FullscreenExit */}
+            </IconButton>
+
+            <IconButton
+              size="small"
+              onClick={handleCopy}
+              sx={{
+                color: copied ? "success.main" : "text.secondary",
+                "&:hover": { bgcolor: "#30363d" },
+              }}
+            >
+              {copied ? <Check /> : <Copy size={16} />} {/* Reemplaza ContentCopy */}
+            </IconButton>
+
+            <IconButton
+              size="small"
+              onClick={handleDownload}
+              sx={{
+                color: "text.secondary",
+                "&:hover": { bgcolor: "#30363d" },
+              }}
+            >
+              <Download />
+            </IconButton>
+          </Box>
+        </Toolbar>
+      </AppBar>
+      
+      <Box 
+        sx={{ 
+          display: "flex",
+          flex: 1,
+          position: "relative",
+          overflow: "hidden"
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 240,
+            bgcolor: "background.paper",
+            borderRight: 1,
+            borderColor: "divider",
+            transform: isSidebarOpen ? "none" : "translateX(-100%)",
+            transition: "transform 0.2s ease-in-out",
+          }}
+        >
+          <FileTree />
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            overflow: "auto",
+            marginLeft: isSidebarOpen ? "240px" : 0,
+            transition: "margin-left 0.2s ease-in-out",
+            width: "100%",
+          }}
+        >
+          {renderContent()}
+        </Box>
+      </Box>
+    </Box>
   );
 }

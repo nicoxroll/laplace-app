@@ -1,12 +1,22 @@
 "use client";
 
-import { Resizable } from "@/components/ui/resizable";
 import { useRepository } from "@/contexts/repository-context";
 import { RepositoryService } from "@/services/repository-service";
 import type { Repository } from "@/types/repository";
-import { Bot, Github, Gitlab, Loader2, Search } from "lucide-react";
+import {
+  GitHub,
+  Search as SearchIcon,
+} from "@mui/icons-material";
+import {
+  Box,
+  InputAdornment,
+  ListItemButton,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { Gitlab } from "lucide-react";
 
 export function RepositoryList() {
   const { data: session } = useSession();
@@ -20,7 +30,6 @@ export function RepositoryList() {
   useEffect(() => {
     async function fetchRepositories() {
       if (!session) return;
-
       try {
         setLoading(true);
         const repos = await repositoryService.fetchRepositories(session);
@@ -48,99 +57,139 @@ export function RepositoryList() {
   };
 
   return (
-    <Resizable>
-      <div className="w-full h-full bg-[#161b22] border-r border-[#30363d] flex flex-col relative z-20">
-        <div className="p-4 border-b border-[#30363d]">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search repositories..."
-              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300 focus:outline-none focus:border-[#58a6ff] focus:ring-1 focus:ring-[#58a6ff]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
-          </div>
-        </div>
+    <Box
+      sx={{
+        width: 300,
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        bgcolor: "background.paper",
+        borderRight: 1,
+        borderColor: "divider",
+        position: "fixed",
+        left: 0,
+        top: 0,
+        pt: "64px", // Altura del header
+      }}
+    >
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search repositories..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: "text.secondary" }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              bgcolor: "background.default",
+            },
+          }}
+        />
+      </Box>
 
-        <div className="flex-1 overflow-y-auto scrollbar-custom">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="flex items-center space-x-2 text-gray-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Loading repositories...</span>
-              </div>
-            </div>
-          ) : error ? (
-            <div className="p-4 m-4 bg-red-500/10 text-red-400 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Bot className="h-5 w-5" />
-                <span>{error}</span>
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-blue-400 hover:text-blue-300"
-              >
-                Try again
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-1 p-2">
-              {filteredRepositories.length === 0 ? (
-                <div className="p-4 text-center text-gray-400">
-                  No repositories found
-                </div>
+      <Box sx={{ flex: 1, overflow: "auto" }}>
+        {filteredRepositories.map((repo) => (
+          <ListItemButton
+            key={`${repo.provider}-${repo.id}`}
+            selected={selectedRepo?.id === repo.id}
+            onClick={() => handleRepositorySelect(repo)}
+            sx={{
+              py: 2,
+              px: 2,
+              borderBottom: 1,
+              borderColor: "divider",
+              "&.Mui-selected": {
+                bgcolor: "#1c2128",
+              },
+              "&:hover": {
+                bgcolor: "#1c2128",
+              },
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                width: "100%",
+                gap: 1,
+              }}
+            >
+              {repo.provider === "github" ? (
+                <GitHub sx={{ color: "text.secondary", mt: 0.5 }} />
               ) : (
-                filteredRepositories.map((repo) => (
-                  <button
-                    key={`${repo.provider}-${repo.id}`}
-                    onClick={() => handleRepositorySelect(repo)}
-                    className={`w-full p-3 text-left rounded-lg transition-colors group ${
-                      selectedRepo?.id === repo.id
-                        ? "bg-[#1c2128]"
-                        : "hover:bg-[#1c2128]"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {repo.provider === "github" ? (
-                        <Github className="h-5 w-5 text-gray-400 group-hover:text-gray-300 shrink-0 mt-0.5" />
-                      ) : (
-                        <Gitlab className="h-5 w-5 text-[#fc6d26] shrink-0 mt-0.5" />
-                      )}
-
-                      <div className="flex-1 min-w-0 flex justify-between items-start">
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm text-gray-200 truncate">
-                            {repo.name}
-                          </div>
-                          <div className="text-xs text-gray-400 truncate">
-                            {repo.owner.login}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1 ml-2">
-                          <span
-                            className={`px-1.5 py-0.5 rounded-full text-[11px] ${
-                              repo.private
-                                ? "bg-yellow-500/20 text-yellow-400"
-                                : "bg-green-500/20 text-green-400"
-                            }`}
-                          >
-                            {repo.private ? "Private" : "Public"}
-                          </span>
-                          <span className="text-[11px] text-gray-500">
-                            {repo.default_branch}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))
+                <Gitlab sx={{ mt: 0.5 }} />
               )}
-            </div>
-          )}
-        </div>
-      </div>
-    </Resizable>
+              <Box
+                sx={{
+                  minWidth: 0,
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.5,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 1,
+                    width: "100%",
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.primary",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {repo.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      bgcolor: repo.private ? "warning.dark" : "success.dark",
+                      color: "text.primary", // Color más claro para mejor contraste
+                      fontWeight: 500, // Un poco más bold para mejor legibilidad
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {repo.private ? "Private" : "Public"}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    display: "block",
+                  }}
+                >
+                  {repo.owner?.login || repo.namespace?.name}
+                </Typography>
+              </Box>
+            </Box>
+          </ListItemButton>
+        ))}
+      </Box>
+    </Box>
   );
 }

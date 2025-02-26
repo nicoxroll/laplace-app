@@ -407,9 +407,6 @@ export function SecuritySection({ repository }: { repository: Repository }) {
                       <h4 className="text-sm font-medium text-gray-200">
                         {alert.title}
                       </h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {alert.description}
-                      </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-xs text-gray-400">
                           {alert.affected_package}
