@@ -26,34 +26,15 @@ interface Issue {
 }
 
 export function IssuesSection({ repository }: { repository: Repository }) {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchIssues = useCallback(async () => {
-    // Check authentication status
-    if (status === "loading") return;
-
-    // Modificamos la verificación de autenticación para incluir el token en user
-    if (!session?.user?.accessToken) {
-      console.log("Session debug:", session); // Para debugging
-      setError("Authentication token not found");
-      setLoading(false);
-      return;
-    }
-
-    // Check repository
-    if (!repository || !repository.full_name) {
-      setError("No repository selected");
-      setLoading(false);
-      return;
-    }
-
-    // Verify provider
-    if (repository.provider !== "github") {
-      setError("Only GitHub repositories are supported");
+    if (!session?.user?.accessToken || !repository) {
+      setError("Authentication or repository not available");
       setLoading(false);
       return;
     }
@@ -62,45 +43,88 @@ export function IssuesSection({ repository }: { repository: Repository }) {
     setError(null);
 
     try {
-      const octokit = new Octokit({
-        auth: session.user.accessToken, // Usamos el token desde session.user
-      });
+      let fetchedIssues: Issue[] = [];
 
-      const [owner, repo] = repository.full_name.split("/");
+      if (repository.provider === "github") {
+        const octokit = new Octokit({
+          auth: session.user.accessToken,
+        });
 
-      const { data } = await octokit.issues.listForRepo({
-        owner,
-        repo,
-        state: "all",
-        per_page: 100,
-        sort: "created",
-        direction: "desc",
-      });
+        const [owner, repo] = repository.full_name.split("/");
+        const { data } = await octokit.issues.listForRepo({
+          owner,
+          repo,
+          state: "all",
+          per_page: 100,
+          sort: "created",
+          direction: "desc",
+        });
 
-      // Filter out pull requests from issues
-      const issuesOnly = data
-        .filter((issue) => !issue.pull_request && issue.user !== null)
-        .map((issue) => ({
-          ...issue,
-          labels: issue.labels.map((label) =>
-            typeof label === "string"
-              ? { name: label, color: "" }
-              : { name: label.name || "", color: label.color || "" }
-          ),
+        fetchedIssues = data
+          .filter((issue) => !issue.pull_request)
+          .map((issue) => ({
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            state: issue.state,
+            created_at: issue.created_at,
+            html_url: issue.html_url,
+            user: issue.user
+              ? {
+                  login: issue.user.login,
+                  avatar_url: issue.user.avatar_url,
+                }
+              : null,
+            labels: issue.labels.map((label) =>
+              typeof label === "string"
+                ? { name: label, color: "" }
+                : { name: label.name || "", color: label.color || "" }
+            ),
+          }));
+      } else if (repository.provider === "gitlab") {
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${repository.id}/issues?scope=all`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.user.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`GitLab API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        fetchedIssues = data.map((issue: any) => ({
+          id: issue.id,
+          number: issue.iid,
+          title: issue.title,
+          state: issue.state === "opened" ? "open" : issue.state,
+          created_at: issue.created_at,
+          html_url: issue.web_url,
+          user: issue.author
+            ? {
+                login: issue.author.username,
+                avatar_url: issue.author.avatar_url,
+              }
+            : null,
+          labels: issue.labels.map((label: string) => ({
+            name: label,
+            color: "gray", // GitLab no proporciona colores por defecto
+          })),
         }));
+      }
 
-      setIssues(issuesOnly as Issue[]);
+      setIssues(fetchedIssues);
     } catch (err) {
       console.error("Error fetching issues:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to fetch issues from GitHub"
-      );
+      setError(err instanceof Error ? err.message : "Failed to fetch issues");
     } finally {
       setLoading(false);
     }
-  }, [repository, session, status]);
+  }, [repository, session]);
 
   useEffect(() => {
     fetchIssues();

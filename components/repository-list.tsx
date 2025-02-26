@@ -2,16 +2,16 @@
 
 import { Resizable } from "@/components/ui/resizable";
 import { useRepository } from "@/contexts/repository-context";
+import { RepositoryService } from "@/services/repository-service";
 import type { Repository } from "@/types/repository";
 import { Bot, Github, Gitlab, Loader2, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { RepositoryService } from "@/services/repository-service";
 
 export function RepositoryList() {
   const { data: session } = useSession();
   const [repositories, setRepositories] = useState<Repository[]>([]);
-  const { selectedRepo, setSelectedRepo } = useRepository();
+  const { selectedRepo, setSelectedRepo, resetContext } = useRepository();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,6 +41,11 @@ export function RepositoryList() {
   const filteredRepositories = repositories.filter((repo) =>
     repo.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleRepositorySelect = (repo: Repository) => {
+    resetContext();
+    setSelectedRepo(repo);
+  };
 
   return (
     <Resizable>
@@ -89,7 +94,7 @@ export function RepositoryList() {
                 filteredRepositories.map((repo) => (
                   <button
                     key={`${repo.provider}-${repo.id}`}
-                    onClick={() => setSelectedRepo(repo)}
+                    onClick={() => handleRepositorySelect(repo)}
                     className={`w-full p-3 text-left rounded-lg transition-colors group ${
                       selectedRepo?.id === repo.id
                         ? "bg-[#1c2128]"

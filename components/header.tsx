@@ -111,12 +111,14 @@ export function Header({ activeSection, onSectionChange }: HeaderProps) {
 
             {/* Dropdown Menu */}
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg py-1 z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg py-1 z-50">
                 <div className="px-4 py-2 border-b border-[#30363d]">
-                  <p className="text-sm font-medium text-gray-200">
+                  <p className="text-sm font-medium text-gray-200 truncate">
                     {session.user.name}
                   </p>
-                  <p className="text-xs text-gray-400">{session.user.email}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {session.user.email}
+                  </p>
                 </div>
                 <button
                   onClick={() => signOut()}

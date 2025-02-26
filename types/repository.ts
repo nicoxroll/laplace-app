@@ -70,3 +70,19 @@ export interface RepositoryListProps {
   selectedRepo: string | null;
   className?: string;
 }
+
+export interface Branch {
+  name: string;
+  commit: {
+    sha: string;
+  };
+}
+
+export interface Commit {
+  sha: string;
+  message: string;
+  author: {
+    name: string;
+    date: string;
+  };
+}

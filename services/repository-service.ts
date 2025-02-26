@@ -1,4 +1,6 @@
 import {
+  Branch,
+  Commit,
   RepositoryContext,
   RepositoryFile,
   RepositoryProvider,
@@ -313,6 +315,170 @@ export class RepositoryService {
         message: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
       });
+      return [];
+    }
+  }
+
+  async fetchBranches(
+    repository: Repository,
+    token: string
+  ): Promise<Branch[]> {
+    try {
+      if (repository.provider === "gitlab") {
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${repository.id}/repository/branches`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `GitLab API error: ${response.status} ${response.statusText}`
+          );
+        }
+
+        const data = await response.json();
+        return data.map((branch: any) => ({
+          name: branch.name,
+          commit: {
+            sha: branch.commit.id,
+            message: branch.commit.message,
+            author: {
+              name: branch.commit.author_name,
+              date: branch.commit.committed_date,
+            },
+          },
+        }));
+      } else {
+        const [owner, repo] = repository.full_name.split("/");
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/branches`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `GitHub API error: ${response.status} ${response.statusText}`
+          );
+        }
+
+        return await response.json();
+      }
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      return [];
+    }
+  }
+
+  async fetchCommits(
+    repository: Repository,
+    token: string,
+    branch: string
+  ): Promise<Commit[]> {
+    try {
+      if (repository.provider === "gitlab") {
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${repository.id}/repository/commits?ref_name=${branch}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.map((commit: any) => ({
+            sha: commit.id,
+            message: commit.title,
+            author: {
+              name: commit.author_name,
+              date: commit.created_at,
+            },
+          }));
+        }
+      } else {
+        // Existing GitHub code
+        const [owner, repo] = repository.full_name.split("/");
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.map((commit: any) => ({
+            sha: commit.sha,
+            message: commit.commit.message,
+            author: {
+              name: commit.commit.author.name,
+              date: commit.commit.author.date,
+            },
+          }));
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching commits:", error);
+      return [];
+    }
+  }
+
+  async fetchFileContent(
+    repository: Repository,
+    token: string,
+    path: string,
+    ref: string
+  ): Promise<string[]> {
+    try {
+      if (repository.provider === "gitlab") {
+        const encodedPath = encodeURIComponent(path);
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${repository.id}/repository/files/${encodedPath}/raw?ref=${ref}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const content = await response.text();
+          return content.split("\n");
+        }
+      } else {
+        // Existing GitHub code
+        const [owner, repo] = repository.full_name.split("/");
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${ref}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github.v3.raw",
+            },
+          }
+        );
+
+        if (response.ok) {
+          const content = await response.text();
+          return content.split("\n");
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching file content:", error);
       return [];
     }
   }

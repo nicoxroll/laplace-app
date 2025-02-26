@@ -37,58 +37,94 @@ export function InsightsSection({ repository }: { repository: Repository }) {
         return;
       }
 
-      if (!repository?.full_name) {
-        setError("No repository selected");
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
       try {
-        const [owner, repo] = repository.full_name.split("/");
+        if (repository.provider === "gitlab") {
+          // GitLab API calls
+          const headers = {
+            Authorization: `Bearer ${session.user.accessToken}`,
+          };
 
-        // Using the same auth pattern as Issues/PRs
-        const headers = {
-          Authorization: `Bearer ${session.user.accessToken}`,
-          Accept: "application/vnd.github.v3+json",
-        };
+          const [projectResponse, branchesResponse, commitsResponse] =
+            await Promise.all([
+              fetch(`https://gitlab.com/api/v4/projects/${repository.id}`, {
+                headers,
+              }),
+              fetch(
+                `https://gitlab.com/api/v4/projects/${repository.id}/repository/branches`,
+                { headers }
+              ),
+              fetch(
+                `https://gitlab.com/api/v4/projects/${repository.id}/repository/commits`,
+                { headers }
+              ),
+            ]);
 
-        // Fetch all data in parallel for better performance
-        const [repoResponse, branchesResponse, contributorsResponse] =
-          await Promise.all([
-            fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers }),
-            fetch(`https://api.github.com/repos/${owner}/${repo}/branches`, {
-              headers,
-            }),
-            fetch(
-              `https://api.github.com/repos/${owner}/${repo}/contributors`,
-              { headers }
-            ),
+          if (!projectResponse.ok) {
+            throw new Error(
+              `Failed to fetch GitLab project data: ${projectResponse.statusText}`
+            );
+          }
+
+          const [projectData, branchesData, commitsData] = await Promise.all([
+            projectResponse.json(),
+            branchesResponse.json(),
+            commitsResponse.json(),
           ]);
 
-        if (!repoResponse.ok) {
-          throw new Error(
-            `Failed to fetch repository data: ${repoResponse.statusText}`
-          );
+          setInsights({
+            stars: projectData.star_count || 0,
+            forks: projectData.forks_count || 0,
+            branches: Array.isArray(branchesData) ? branchesData.length : 0,
+            commits: Array.isArray(commitsData) ? commitsData.length : 0,
+            contributors: projectData.contributors_count || 0,
+          });
+        } else {
+          // Existing GitHub code
+          const [owner, repo] = repository.full_name.split("/");
+          const headers = {
+            Authorization: `Bearer ${session.user.accessToken}`,
+            Accept: "application/vnd.github.v3+json",
+          };
+
+          const [repoResponse, branchesResponse, contributorsResponse] =
+            await Promise.all([
+              fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+                headers,
+              }),
+              fetch(`https://api.github.com/repos/${owner}/${repo}/branches`, {
+                headers,
+              }),
+              fetch(
+                `https://api.github.com/repos/${owner}/${repo}/contributors`,
+                { headers }
+              ),
+            ]);
+
+          if (!repoResponse.ok) {
+            throw new Error(
+              `Failed to fetch GitHub repository data: ${repoResponse.statusText}`
+            );
+          }
+
+          const [repoData, branchesData, contributorsData] = await Promise.all([
+            repoResponse.json(),
+            branchesResponse.json(),
+            contributorsResponse.json(),
+          ]);
+
+          setInsights({
+            stars: repoData.stargazers_count || 0,
+            forks: repoData.forks_count || 0,
+            branches: Array.isArray(branchesData) ? branchesData.length : 0,
+            commits: repoData.size || 0,
+            contributors: Array.isArray(contributorsData)
+              ? contributorsData.length
+              : 0,
+          });
         }
-
-        const [repoData, branchesData, contributorsData] = await Promise.all([
-          repoResponse.json(),
-          branchesResponse.json(),
-          contributorsResponse.json(),
-        ]);
-
-        setInsights({
-          stars: repoData.stargazers_count || 0,
-          forks: repoData.forks_count || 0,
-          branches: Array.isArray(branchesData) ? branchesData.length : 0,
-          commits: repoData.size || 0,
-          contributors: Array.isArray(contributorsData)
-            ? contributorsData.length
-            : 0,
-        });
       } catch (err) {
         console.error("Error fetching insights:", err);
         setError(
@@ -106,16 +142,20 @@ export function InsightsSection({ repository }: { repository: Repository }) {
     return (
       <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
         <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-          <AlertCircle className="h-6 w-6" />
-          Cargando Insights...
+          <LineChart className="h-6 w-6" />
+          Loading Insights...
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
-              <div className="flex flex-col gap-2">
-                <div className="h-4 bg-gray-700 rounded w-3/4" />
-                <div className="h-6 bg-gray-700 rounded w-1/2" />
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d] animate-pulse"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-5 w-5 rounded bg-gray-700" />
+                <div className="h-4 bg-gray-700 rounded w-20" />
               </div>
+              <div className="h-8 bg-gray-700 rounded w-16 mt-2" />
             </div>
           ))}
         </div>
@@ -142,8 +182,7 @@ export function InsightsSection({ repository }: { repository: Repository }) {
       icon={LineChart}
       title={`Repository Insights - ${repository.full_name}`}
     >
-      {/* Insights content */}
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
           <div className="flex items-center gap-2">
             <Star className="h-5 w-5 text-yellow-400" />
@@ -181,6 +220,16 @@ export function InsightsSection({ repository }: { repository: Repository }) {
           </div>
           <p className="text-2xl font-bold text-gray-200 mt-2">
             {insights?.contributors.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
+          <div className="flex items-center gap-2">
+            <Star className="h-5 w-5 text-orange-400" />
+            <span className="text-gray-300">Forks</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-200 mt-2">
+            {insights?.forks.toLocaleString()}
           </p>
         </div>
       </div>
