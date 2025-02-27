@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useReducer, ReactNode } from "react";
+import { createContext, useContext, useReducer, ReactNode, useState } from "react";
 import type { ChatState, Message } from "@/types/chat";
 
 type ChatAction =
@@ -22,6 +22,8 @@ const initialState: ChatState = {
   isExpanded: false,
   messages: [],
   loading: false,
+  codeIndexReady: false,
+  setCodeIndexReady: () => {},
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -60,15 +62,21 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
-export function ChatProvider({ children }: { children: ReactNode }) {
+export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
+  const [codeIndexReady, setCodeIndexReady] = useState(false);
   const [state, dispatch] = useReducer(chatReducer, initialState);
 
-  return (
-    <ChatContext.Provider value={{ state, dispatch }}>
-      {children}
-    </ChatContext.Provider>
-  );
-}
+  const value = {
+    state: {
+      ...state,
+      codeIndexReady,
+      setCodeIndexReady,
+    },
+    dispatch,
+  };
+
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+};
 
 export function useChat() {
   const context = useContext(ChatContext);

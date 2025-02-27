@@ -68,6 +68,7 @@
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",
     "@mui/styles": "^6.4.6",
+    "@mui/x-tree-view": "^7.26.0",
     "@octokit/rest": "^21.1.1",
     "@tailwindcss/typography": "^0.5.16",
     "@types/highlight.js": "^10.1.0",

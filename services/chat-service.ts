@@ -16,6 +16,14 @@ export class ChatService {
     return ChatService.instance;
   }
 
+  setCodeIndexer(indexer: CodeIndexer) {
+    this.codeIndexer = indexer;
+  }
+
+  getCodeIndexer() {
+    return this.codeIndexer;
+  }
+
   formatRepoContext(context: RepositoryContext): string {
     let formattedContext = `You are analyzing a ${context.provider} repository: ${context.repository.full_name}\n`;
     

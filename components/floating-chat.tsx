@@ -4,17 +4,20 @@ import { useChat } from "@/contexts/chat-context";
 import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
 import { ChatInput } from "@/components/chat/chat-input";
-import { Box, Fab, IconButton, Paper } from "@mui/material";
+import { Box, Fab, IconButton, Paper, LinearProgress, useTheme } from "@mui/material"; // Add useTheme here
 import { Bot, Send, StopCircle, Maximize2, Minimize2, X } from "lucide-react";
 import { Resizable } from "re-resizable";
 import { useEffect, useRef, useState } from "react";
 import { MessageRenderer } from "./chat/message-renderer";
 import { useSession } from "next-auth/react"; // Add this import
+import { CodeIndexer } from "@/services/code-indexer";
+
 
 export function FloatingChat() {
   const { data: session } = useSession(); // Add this line
   const { state, dispatch } = useChat();
   const { selectedRepo, currentPath, fileContent } = useRepository();
+  const theme = useTheme(); // Add this line to get the theme
   const [input, setInput] = useState("");
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
@@ -24,6 +27,10 @@ export function FloatingChat() {
     width: state.isExpanded ? 800 : 380,
     height: state.isExpanded ? 600 : 500,
   });
+
+  // Add loading indicator for indexing
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [indexProgress, setIndexProgress] = useState(0);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -47,6 +54,32 @@ export function FloatingChat() {
       );
     }
   }, [selectedRepo, session?.user?.accessToken]);
+
+  useEffect(() => {
+    if (selectedRepo && session?.user?.accessToken && !state.codeIndexReady) {
+      setIsIndexing(true);
+      setIndexProgress(0);
+
+      const indexer = new CodeIndexer(session.user.accessToken);
+      
+      indexer.onProgress((progress) => {
+        const percentage = Math.round(progress * 100);
+        setIndexProgress(percentage);
+      });
+
+      indexer.indexRepository(selectedRepo.full_name)
+        .then(() => {
+          chatService.setCodeIndexer(indexer);
+          state.setCodeIndexReady(true);
+        })
+        .catch((error) => {
+          console.error("Error indexing repository:", error);
+        })
+        .finally(() => {
+          setIsIndexing(false);
+        });
+    }
+  }, [selectedRepo, session?.user?.accessToken, state.codeIndexReady]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,6 +275,22 @@ export function FloatingChat() {
                   </Box>
                 </Box>
               </Box>
+
+              {/* Add indexing progress */}
+              {isIndexing && (
+                <LinearProgress
+                  variant="determinate"
+                  value={indexProgress}
+                  sx={{ 
+                    height: 2,
+                    borderRadius: 1,
+                    backgroundColor: theme.palette.action.selected,
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 1
+                    }
+                  }}
+                />
+              )}
 
               <Box
                 ref={chatContainerRef}

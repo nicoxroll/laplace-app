@@ -3,49 +3,73 @@ import { Octokit } from "octokit";
 
 export class CodeIndexer {
   private octokit: Octokit;
-  public codebase: Record<string, string> = {};
+  public codebase: Record<string, any> = {};
   private maxFileSize = 1000000; // 1MB
   private chunkSize = 100000; // 100KB por chunk
+  private progressCallback?: (progress: number) => void;
 
   constructor(token: string) {
     this.octokit = new Octokit({ auth: token });
   }
 
-  async indexRepository(repoFullName: string) {
+  onProgress(callback: (progress: number) => void) {
+    this.progressCallback = callback;
+  }
+
+  async indexRepository(repoFullName: string): Promise<Record<string, any>> {
     try {
       const [owner, repo] = repoFullName.split("/");
-      
-      // Primero verificar si el repo está vacío
-      const repoInfo = await this.octokit.rest.repos.get({
+
+      // Log the start of indexing
+      console.log(`Starting indexing for ${repoFullName}`);
+
+      // Get repo info
+      const repoInfo = await this.octokit.rest.repos.get({ owner, repo });
+
+      if (!repoInfo.data.default_branch) {
+        throw new Error("No default branch found");
+      }
+
+      const defaultBranch = repoInfo.data.default_branch;
+
+      // Get ref data
+      const { data: refData } = await this.octokit.rest.git.getRef({
         owner,
         repo,
+        ref: `heads/${defaultBranch}`,
       });
 
-      if (repoInfo.data.size === 0) {
-        console.log("Repository is empty");
-        return {};
+      if (!refData.object?.sha) {
+        throw new Error("Could not get repository reference");
       }
 
-      // Si no está vacío, intentar obtener el árbol desde la rama por defecto
-      const defaultBranch = repoInfo.data.default_branch;
-      
-      try {
-        const { data: refData } = await this.octokit.rest.git.getRef({
-          owner,
-          repo,
-          ref: `heads/${defaultBranch}`,
-        });
+      // Get tree
+      const tree = await this.getRepoTree(owner, repo, refData.object.sha);
+      const totalFiles = tree.filter(item => this.isCodeFile(item.path)).length;
 
-        const tree = await this.getRepoTree(owner, repo, refData.object.sha);
-        this.codebase = await this.processTree(owner, repo, tree);
-        return this.codebase;
-      } catch (error) {
-        console.log("Repository might be empty or inaccessible");
-        return {};
+      if (totalFiles === 0) {
+        throw new Error("No indexable files found");
       }
+
+      let filesProcessed = 0;
+
+      // Process tree with proper progress tracking
+      const codebase = await this.processTree(
+        owner,
+        repo,
+        tree,
+        (progress) => {
+          filesProcessed++;
+          const percentage = filesProcessed / totalFiles;
+          this.progressCallback?.(percentage);
+        }
+      );
+
+      this.codebase = codebase; // Make sure to set the class property
+      return this.codebase;
     } catch (error) {
       console.error("Error in indexRepository:", error);
-      return {};
+      throw error; // Re-throw to handle in SecuritySection
     }
   }
 
@@ -64,7 +88,12 @@ export class CodeIndexer {
     }
   }
 
-  private async processTree(owner: string, repo: string, tree: any[]) {
+  private async processTree(
+    owner: string,
+    repo: string,
+    tree: any[],
+    progressCallback: (progress: number) => void
+  ) {
     const codebase: Record<string, string> = {};
     const processedPaths = new Set<string>();
 
@@ -84,6 +113,7 @@ export class CodeIndexer {
               if (content) {
                 codebase[item.path] = content;
                 processedPaths.add(item.path);
+                progressCallback(1);
               }
             } catch (error) {
               console.error(`Error processing file ${item.path}:`, error);
@@ -92,13 +122,17 @@ export class CodeIndexer {
         })
       );
       // Pequeña pausa entre chunks para evitar rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     return codebase;
   }
 
-  private async getFileContent(owner: string, repo: string, path: string): Promise<string> {
+  private async getFileContent(
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<string> {
     try {
       const response = await this.octokit.rest.repos.getContent({
         owner,
@@ -106,34 +140,42 @@ export class CodeIndexer {
         path,
       });
 
-      if ('content' in response.data && typeof response.data.content === 'string') {
-        const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
+      if (
+        "content" in response.data &&
+        typeof response.data.content === "string"
+      ) {
+        const content = Buffer.from(response.data.content, "base64").toString(
+          "utf-8"
+        );
         // Procesar el contenido en chunks si es muy grande
         if (content.length > this.chunkSize) {
           return this.processLargeContent(content);
         }
         return content;
       }
-      return '';
+      return "";
     } catch (error) {
       console.error(`Error fetching content for ${path}:`, error);
-      return '';
+      return "";
     }
   }
 
   private processLargeContent(content: string): string {
     // Dividir el contenido en chunks y procesar solo las partes más relevantes
-    const lines = content.split('\n');
+    const lines = content.split("\n");
     const totalLines = lines.length;
     const maxLines = 1000; // Máximo número de líneas a procesar
 
     if (totalLines > maxLines) {
       // Tomar el inicio, medio y final del archivo
       const startLines = lines.slice(0, maxLines / 3);
-      const midLines = lines.slice(Math.floor(totalLines / 2) - maxLines / 6, Math.floor(totalLines / 2) + maxLines / 6);
+      const midLines = lines.slice(
+        Math.floor(totalLines / 2) - maxLines / 6,
+        Math.floor(totalLines / 2) + maxLines / 6
+      );
       const endLines = lines.slice(totalLines - maxLines / 3);
-      
-      return [...startLines, ...midLines, ...endLines].join('\n');
+
+      return [...startLines, ...midLines, ...endLines].join("\n");
     }
 
     return content;
@@ -149,19 +191,51 @@ export class CodeIndexer {
 
   private isCodeFile(path: string): boolean {
     const extensions = [
-      ".ts", ".tsx", ".js", ".jsx", ".py", ".java", ".go",
-      ".rs", ".md", ".json", ".yml", ".yaml", ".css", ".scss",
-      ".html", ".xml", ".sh", ".bash", ".sql", ".gitignore",
-      ".env.example", ".dockerignore", "Dockerfile", "LICENSE",
-      ".cpp", ".c", ".h", ".hpp", ".cs", ".rb", ".php"
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".py",
+      ".java",
+      ".go",
+      ".rs",
+      ".md",
+      ".json",
+      ".yml",
+      ".yaml",
+      ".css",
+      ".scss",
+      ".html",
+      ".xml",
+      ".sh",
+      ".bash",
+      ".sql",
+      ".gitignore",
+      ".env.example",
+      ".dockerignore",
+      "Dockerfile",
+      "LICENSE",
+      ".cpp",
+      ".c",
+      ".h",
+      ".hpp",
+      ".cs",
+      ".rb",
+      ".php",
     ];
-    
+
     // Si no tiene extensión, verificar si es un archivo especial
-    if (!path.includes('.')) {
-      const specialFiles = ["Dockerfile", "LICENSE", ".gitignore", ".env.example", ".dockerignore"];
-      return specialFiles.some(file => path.endsWith(file));
+    if (!path.includes(".")) {
+      const specialFiles = [
+        "Dockerfile",
+        "LICENSE",
+        ".gitignore",
+        ".env.example",
+        ".dockerignore",
+      ];
+      return specialFiles.some((file) => path.endsWith(file));
     }
-    
-    return extensions.some(ext => path.toLowerCase().endsWith(ext));
+
+    return extensions.some((ext) => path.toLowerCase().endsWith(ext));
   }
 }
