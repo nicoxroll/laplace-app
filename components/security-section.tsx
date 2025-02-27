@@ -12,13 +12,18 @@ import {
   LinearProgress,
   styled,
   Typography,
-  useTheme
+  useTheme,
 } from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Security } from "@mui/icons-material";
+import { match } from "assert";
+import { error } from "console";
+import { report } from "process";
+import style from "styled-jsx/style";
 
 const StyledContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -39,7 +44,7 @@ export function SecuritySection() {
   const { selectedRepo, currentPath, fileContent } = useRepository();
   const { state } = useChat();
   const theme = useTheme();
-  
+
   const [analyzing, setAnalyzing] = useState(false);
   const [report, setReport] = useState<SecurityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +52,7 @@ export function SecuritySection() {
   const [indexProgress, setIndexProgress] = useState(0);
   const analysisRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  
+
   const chatService = ChatService.getInstance();
 
   // Add this helper function to process repository files in chunks
@@ -61,47 +66,58 @@ export function SecuritySection() {
     const MAX_FILES_PER_CHUNK = 10;
     const MAX_CONTENT_SIZE = 50000; // ~50KB per chunk to stay within API limits
     let fullContent = "";
-    
+
     // Extract repository information
     const { repository, files = [] } = repoContext;
-    
+
     // If we don't have many files, just do a single analysis
     if (files.length <= MAX_FILES_PER_CHUNK) {
-      return analyzeRepositoryChunk(repoContext, analysisType, accessToken, controller, onUpdate);
+      return analyzeRepositoryChunk(
+        repoContext,
+        analysisType,
+        accessToken,
+        controller,
+        onUpdate
+      );
     }
-    
-    console.log(`Processing large repository (${files.length} files) in chunks`);
-    
+
+    console.log(
+      `Processing large repository (${files.length} files) in chunks`
+    );
+
     // Initialize the report structure
     fullContent = "# Security Analysis Report\n\n";
     onUpdate(fullContent);
-    
+
     // Process files in chunks
     for (let i = 0; i < files.length; i += MAX_FILES_PER_CHUNK) {
       const chunkFiles = files.slice(i, i + MAX_FILES_PER_CHUNK);
-      const totalSize = chunkFiles.reduce((size, file) => size + (file.content?.length || 0), 0);
-      
+      const totalSize = chunkFiles.reduce(
+        (size, file) => size + (file.content?.length || 0),
+        0
+      );
+
       // If this chunk is too large, split it further
       if (totalSize > MAX_CONTENT_SIZE) {
         for (const file of chunkFiles) {
           // Process each large file individually
           if (file.content && file.content.length > MAX_CONTENT_SIZE) {
             console.log(`Processing large file individually: ${file.path}`);
-            
+
             const chunkContext = {
               ...repoContext,
               files: [file],
-              chunkInfo: `File ${i+1} of ${files.length}: ${file.path}`
+              chunkInfo: `File ${i + 1} of ${files.length}: ${file.path}`,
             };
-            
+
             const chunkResult = await analyzeRepositoryChunk(
-              chunkContext, 
-              "file-security", 
-              accessToken, 
+              chunkContext,
+              "file-security",
+              accessToken,
               controller,
               (content) => onUpdate(fullContent + content)
             );
-            
+
             fullContent += `\n## Analysis of ${file.path}\n${chunkResult}\n`;
             onUpdate(fullContent);
           }
@@ -111,32 +127,36 @@ export function SecuritySection() {
         const chunkContext = {
           ...repoContext,
           files: chunkFiles,
-          chunkInfo: `Processing files ${i+1} to ${Math.min(i+MAX_FILES_PER_CHUNK, files.length)} of ${files.length}`
+          chunkInfo: `Processing files ${i + 1} to ${Math.min(
+            i + MAX_FILES_PER_CHUNK,
+            files.length
+          )} of ${files.length}`,
         };
-        
+
         console.log(`Processing chunk of ${chunkFiles.length} files`);
-        
+
         const chunkResult = await analyzeRepositoryChunk(
-          chunkContext, 
-          "chunk-security", 
-          accessToken, 
+          chunkContext,
+          "chunk-security",
+          accessToken,
           controller,
           (content) => onUpdate(fullContent + content)
         );
-        
+
         fullContent += chunkResult;
         onUpdate(fullContent);
       }
-      
+
       // Add separator between chunks
       fullContent += "\n\n---\n\n";
       onUpdate(fullContent);
     }
-    
+
     // Add summary section
-    fullContent += "\n## Overall Security Assessment\n\nThis is a consolidated report from analyzing the repository in chunks.\n";
+    fullContent +=
+      "\n## Overall Security Assessment\n\nThis is a consolidated report from analyzing the repository in chunks.\n";
     onUpdate(fullContent);
-    
+
     return fullContent;
   };
 
@@ -151,40 +171,44 @@ export function SecuritySection() {
     const apiPayload = {
       context: chunkContext,
       repoContext: chunkContext,
-      analysisType: analysisType
+      analysisType: analysisType,
     };
-    
-    console.log(`Sending API request for ${chunkContext.files?.length || 0} files`);
-    
+
+    console.log(
+      `Sending API request for ${chunkContext.files?.length || 0} files`
+    );
+
     const response = await fetch("/api/analyze", {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}` 
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(apiPayload),
       signal: controller.signal,
     });
-  
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
-      throw new Error(`Analysis request failed (${response.status}): ${errorText}`);
+      throw new Error(
+        `Analysis request failed (${response.status}): ${errorText}`
+      );
     }
-  
+
     // Process the stream response
     const reader = response.body?.getReader();
     if (!reader) throw new Error("No response stream available");
-  
+
     let chunkContent = "";
     const decoder = new TextDecoder();
-  
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-  
+
       const text = decoder.decode(value);
       const lines = text.split("\n");
-  
+
       for (const line of lines) {
         if (line.trim().startsWith("data: ")) {
           try {
@@ -199,14 +223,20 @@ export function SecuritySection() {
         }
       }
     }
-    
+
     return chunkContent;
   };
 
-  // Initialize codeIndexer using chatService
+  // Update the initializeIndexer function in security-section.tsx
   const initializeIndexer = useCallback(async () => {
     if (!selectedRepo || !session?.user?.accessToken) {
       setError("Missing repository or session data");
+      return;
+    }
+
+    // Make sure we have a provider
+    if (!selectedRepo.provider) {
+      setError("Repository provider not specified");
       return;
     }
 
@@ -216,33 +246,38 @@ export function SecuritySection() {
     state.setCodeIndexReady(false);
 
     try {
-      // Set up progress handler first
-      const originalIndexer = chatService.getCodeIndexer();
-      if (originalIndexer) {
-        originalIndexer.onProgress((progress) => {
-          const percentage = Math.round(progress * 100);
-          console.log(`Security indexing progress: ${percentage}%`);
-          setIndexProgress(percentage);
-        });
-      }
+      console.log(
+        `Initializing indexer for ${selectedRepo.provider} repository: ${selectedRepo.full_name}`
+      );
 
-      // Initialize the code indexer through the service
+      // Initialize the code indexer through the service, passing the provider explicitly
       await chatService.initializeCodeIndexer(
         session.user.accessToken,
-        selectedRepo.full_name
+        selectedRepo.full_name,
+        selectedRepo.provider // Make sure the provider is passed correctly
       );
-      
+
       const updatedIndexer = chatService.getCodeIndexer();
       if (!updatedIndexer || !updatedIndexer.codebase) {
         throw new Error("Failed to initialize code indexer");
       }
-      
-      console.log("Files indexed:", Object.keys(updatedIndexer.codebase).length);
+
+      console.log(
+        `Files indexed for ${selectedRepo.provider}: ${
+          Object.keys(updatedIndexer.codebase).length
+        }`
+      );
       state.setCodeIndexReady(true);
-      console.log("Repository indexing completed");
     } catch (error) {
-      console.error("Error initializing code indexer:", error);
-      setError(error instanceof Error ? error.message : "Failed to initialize code analysis");
+      console.error(
+        `Error initializing ${selectedRepo.provider} code indexer:`,
+        error
+      );
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to initialize code analysis"
+      );
       state.setCodeIndexReady(false);
     } finally {
       setIsIndexing(false);
@@ -251,18 +286,29 @@ export function SecuritySection() {
 
   // Update useEffect to use shared code indexer
   useEffect(() => {
-    if (selectedRepo && session?.user?.accessToken && !state.codeIndexReady && !isIndexing) {
+    if (
+      selectedRepo &&
+      session?.user?.accessToken &&
+      !state.codeIndexReady &&
+      !isIndexing
+    ) {
       console.log("Triggering security section indexing");
       initializeIndexer();
     }
-  }, [selectedRepo, session?.user?.accessToken, state.codeIndexReady, isIndexing, initializeIndexer]);
+  }, [
+    selectedRepo,
+    session?.user?.accessToken,
+    state.codeIndexReady,
+    isIndexing,
+    initializeIndexer,
+  ]);
 
   // Update the startAnalysis function to handle asynchronous loading better
   const startAnalysis = useCallback(async () => {
     if (!selectedRepo?.full_name || analyzing) {
       return;
     }
-  
+
     // Get repository context from repository service or code indexer
     const codeIndexer = chatService.getCodeIndexer();
     if (!codeIndexer || !codeIndexer.codebase) {
@@ -270,59 +316,65 @@ export function SecuritySection() {
       setError("Repository not properly indexed. Please try reindexing.");
       return;
     }
-  
+
     const indexedFilePaths = Object.keys(codeIndexer.codebase);
     if (indexedFilePaths.length === 0) {
       console.error("No files were indexed");
       setError("No files were indexed. Please try reindexing.");
       return;
     }
-  
+
     setAnalyzing(true);
     setError(null);
     setReport({
-      content: "# Security Analysis Report\n\n_Analyzing repository content..._",
+      content:
+        "# Security Analysis Report\n\n_Analyzing repository content..._",
       isStreaming: true,
       timestamp: Date.now(),
     });
-  
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
-  
+
     try {
       // Create a simplified repository object
       const simplifiedRepo = {
         full_name: selectedRepo.full_name,
-        name: selectedRepo.full_name.split('/')[1] || "repo",
-        owner: selectedRepo.full_name.split('/')[0] || "owner",
+        name: selectedRepo.full_name.split("/")[1] || "repo",
+        owner: selectedRepo.full_name.split("/")[0] || "owner",
         defaultBranch: selectedRepo.defaultBranch || "main",
-        description: selectedRepo.description || ""
+        description: selectedRepo.description || "",
       };
-  
+
       // Convert indexed files to a consistent format
       const indexedFiles = indexedFilePaths
-        .filter(path => typeof codeIndexer.codebase[path] === 'string')
-        .map(filePath => ({
+        .filter((path) => typeof codeIndexer.codebase[path] === "string")
+        .map((filePath) => ({
           path: filePath,
           content: codeIndexer.codebase[filePath],
-          language: filePath.split('.').pop() || 'text'
+          language: filePath.split(".").pop() || "text",
         }));
-  
-      console.log(`Found ${indexedFiles.length} valid indexed files to analyze`);
-      
+
+      console.log(
+        `Found ${indexedFiles.length} valid indexed files to analyze`
+      );
+
       // Create the repository context
       const repoContext = {
         provider: selectedRepo.provider || "github",
         repository: simplifiedRepo,
         currentPath: currentPath || "",
         files: indexedFiles,
-        currentFile: fileContent && fileContent.length > 0 ? {
-          path: currentPath || "",
-          content: fileContent,
-          language: (currentPath || "").split('.').pop() || 'text'
-        } : undefined
+        currentFile:
+          fileContent && fileContent.length > 0
+            ? {
+                path: currentPath || "",
+                content: fileContent,
+                language: (currentPath || "").split(".").pop() || "text",
+              }
+            : undefined,
       };
-  
+
       // Process the repository in chunks
       const fullContent = await processRepositoryInChunks(
         repoContext,
@@ -337,14 +389,13 @@ export function SecuritySection() {
           });
         }
       );
-  
+
       // Final report
       setReport({
         content: fullContent,
         isStreaming: false,
         timestamp: Date.now(),
       });
-  
     } catch (err) {
       if (err.name === "AbortError") {
         setReport({
@@ -376,31 +427,42 @@ export function SecuritySection() {
 
   // Check if we have indexed files
   const codeIndexer = chatService.getCodeIndexer();
-  const hasIndexedFiles = codeIndexer && codeIndexer.codebase && 
-                        Object.keys(codeIndexer.codebase).length > 0;
+  const hasIndexedFiles =
+    codeIndexer &&
+    codeIndexer.codebase &&
+    Object.keys(codeIndexer.codebase).length > 0;
 
   return (
     <StyledContainer>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h6" color="textPrimary">
           <Shield className="mr-2 inline-block h-5 w-5" />
           AI Security Analysis {selectedRepo && `- ${selectedRepo.full_name}`}
         </Typography>
-        
+
         <Box display="flex" gap={2}>
           <Button
             variant="outlined"
             color="primary"
             onClick={handleReindex}
             disabled={isIndexing}
-            startIcon={<RefreshCw className={`h-4 w-4 ${isIndexing ? 'animate-spin' : ''}`} />}
-            sx={{ 
-              textTransform: 'none',
-              boxShadow: 'none',
-              '&:hover': { boxShadow: 'none' }
+            startIcon={
+              <RefreshCw
+                className={`h-4 w-4 ${isIndexing ? "animate-spin" : ""}`}
+              />
+            }
+            sx={{
+              textTransform: "none",
+              boxShadow: "none",
+              "&:hover": { boxShadow: "none" },
             }}
           >
-            {isIndexing ? `Indexing ${indexProgress}%` : 'Reindex'}
+            {isIndexing ? `Indexing ${indexProgress}%` : "Reindex"}
           </Button>
 
           <Button
@@ -408,13 +470,19 @@ export function SecuritySection() {
             color={analyzing ? "error" : "primary"}
             onClick={analyzing ? stopAnalysis : startAnalysis}
             disabled={!selectedRepo || !hasIndexedFiles || isIndexing}
-            startIcon={analyzing ? <X className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-            sx={{ 
-              textTransform: 'none',
-              boxShadow: 'none',
-              '&:hover': {
-                boxShadow: 'none'
-              }
+            startIcon={
+              analyzing ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Shield className="h-4 w-4" />
+              )
+            }
+            sx={{
+              textTransform: "none",
+              boxShadow: "none",
+              "&:hover": {
+                boxShadow: "none",
+              },
             }}
           >
             {analyzing ? "Stop Analysis" : "Start Analysis"}
@@ -426,14 +494,14 @@ export function SecuritySection() {
         <LinearProgress
           variant="determinate"
           value={indexProgress}
-          sx={{ 
+          sx={{
             mb: 2,
             height: 2,
             borderRadius: 1,
             backgroundColor: theme.palette.action.selected,
-            '& .MuiLinearProgress-bar': {
-              borderRadius: 1
-            }
+            "& .MuiLinearProgress-bar": {
+              borderRadius: 1,
+            },
           }}
         />
       )}
@@ -449,35 +517,37 @@ export function SecuritySection() {
       {hasIndexedFiles && (
         <Alert severity="success" sx={{ mb: 2 }}>
           <Typography variant="body2">
-            Repository indexed successfully: {Object.keys(codeIndexer.codebase).length} files available for analysis
+            Repository indexed successfully:{" "}
+            {Object.keys(codeIndexer.codebase).length} files available for
+            analysis
           </Typography>
         </Alert>
       )}
 
       <Collapse in={analyzing}>
-        <LinearProgress 
-          color="primary" 
-          sx={{ 
-            mb: 2, 
+        <LinearProgress
+          color="primary"
+          sx={{
+            mb: 2,
             height: 2,
             borderRadius: 1,
             backgroundColor: theme.palette.action.selected,
-            '& .MuiLinearProgress-bar': {
-              borderRadius: 1
-            }
+            "& .MuiLinearProgress-bar": {
+              borderRadius: 1,
+            },
           }}
-          variant={report?.isStreaming ? 'indeterminate' : 'determinate'}
+          variant={report?.isStreaming ? "indeterminate" : "determinate"}
           value={report?.isStreaming ? undefined : 100}
         />
       </Collapse>
 
       <Collapse in={!!error}>
-        <Alert 
+        <Alert
           severity="error"
-          sx={{ 
+          sx={{
             mb: 2,
             border: `1px solid ${theme.palette.error.dark}`,
-            backgroundColor: theme.palette.error.light
+            backgroundColor: theme.palette.error.light,
           }}
           onClose={() => setError(null)}
         >
@@ -521,7 +591,7 @@ export function SecuritySection() {
                           background: "#0d1117",
                           padding: "1rem",
                           borderRadius: "0.5rem",
-                          border: "1px solid #30363d"
+                          border: "1px solid #30363d",
                         }}
                         lineNumberStyle={{
                           minWidth: "3em",
@@ -529,13 +599,14 @@ export function SecuritySection() {
                           color: "#484f58",
                           textAlign: "right",
                           userSelect: "none",
-                          borderRight: "1px solid #30363d"
+                          borderRight: "1px solid #30363d",
                         }}
                         wrapLines
                         wrapLongLines={false}
                         lineProps={{
                           style: { display: "block", whiteSpace: "pre" },
-                          className: "hover:bg-[#1c2128] px-4 transition-colors",
+                          className:
+                            "hover:bg-[#1c2128] px-4 transition-colors",
                         }}
                       >
                         {String(children).replace(/\n$/, "")}
@@ -562,25 +633,28 @@ export function SecuritySection() {
                 </Typography>
               ),
               p: ({ children }) => (
-                <Typography 
-                  paragraph 
-                  sx={{ 
+                <Typography
+                  paragraph
+                  sx={{
                     mb: 2,
                     lineHeight: 1.6,
-                    color: theme.palette.text.secondary
+                    color: theme.palette.text.secondary,
                   }}
                 >
                   {children}
                 </Typography>
               ),
               ul: ({ children }) => (
-                <Box component="ul" sx={{ 
-                  pl: 3, 
-                  mb: 2,
-                  '& li': {
-                    color: theme.palette.text.secondary
-                  }
-                }}>
+                <Box
+                  component="ul"
+                  sx={{
+                    pl: 3,
+                    mb: 2,
+                    "& li": {
+                      color: theme.palette.text.secondary,
+                    },
+                  }}
+                >
                   {children}
                 </Box>
               ),

@@ -1,39 +1,62 @@
-// services/code-indexer.ts
-import { Octokit } from "octokit";
+import { Octokit } from "@octokit/rest";
 
 export class CodeIndexer {
-  private octokit: Octokit;
   public codebase: Record<string, any> = {};
-  private maxFileSize = 1000000; // 1MB
-  private chunkSize = 100000; // 100KB por chunk
   private progressCallback?: (progress: number) => void;
+  private accessToken: string;
+  private provider: string = "github"; // Default to GitHub
 
   constructor(token: string) {
-    this.octokit = new Octokit({ auth: token });
+    this.accessToken = token;
   }
 
   onProgress(callback: (progress: number) => void) {
     this.progressCallback = callback;
   }
 
-  async indexRepository(repoFullName: string): Promise<Record<string, any>> {
+  async indexRepository(
+    repoFullName: string,
+    provider: string = "github"
+  ): Promise<Record<string, any>> {
     try {
-      const [owner, repo] = repoFullName.split("/");
+      this.provider = provider;
+      console.log(`Indexing ${provider} repository: ${repoFullName}`);
 
-      // Log the start of indexing
-      console.log(`Starting indexing for ${repoFullName}`);
+      this.codebase = {}; // Reset any previous indexing
 
-      // Get repo info
-      const repoInfo = await this.octokit.rest.repos.get({ owner, repo });
-
-      if (!repoInfo.data.default_branch) {
-        throw new Error("No default branch found");
+      // Completely separate code paths for different providers
+      if (provider === "github") {
+        return await this.indexGitHubRepository(repoFullName);
+      } else if (provider === "gitlab") {
+        return await this.indexGitLabRepository(repoFullName);
+      } else {
+        throw new Error(`Unsupported provider: ${provider}`);
       }
+    } catch (error) {
+      console.error(`Error indexing ${provider} repository:`, error);
+      throw error;
+    }
+  }
 
-      const defaultBranch = repoInfo.data.default_branch;
+  // GitHub implementation using Octokit
+  private async indexGitHubRepository(
+    repoFullName: string
+  ): Promise<Record<string, any>> {
+    try {
+      // Create new Octokit instance for GitHub only
+      const octokit = new Octokit({
+        auth: this.accessToken,
+      });
+
+      const [owner, repo] = repoFullName.split("/");
+      console.log(`Starting GitHub indexing for ${owner}/${repo}`);
+
+      // Get repo info using GitHub API
+      const repoInfo = await octokit.rest.repos.get({ owner, repo });
+      const defaultBranch = repoInfo.data.default_branch || "main";
 
       // Get ref data
-      const { data: refData } = await this.octokit.rest.git.getRef({
+      const { data: refData } = await octokit.rest.git.getRef({
         owner,
         repo,
         ref: `heads/${defaultBranch}`,
@@ -44,198 +67,432 @@ export class CodeIndexer {
       }
 
       // Get tree
-      const tree = await this.getRepoTree(owner, repo, refData.object.sha);
-      const totalFiles = tree.filter(item => this.isCodeFile(item.path)).length;
+      const { data } = await octokit.rest.git.getTree({
+        owner,
+        repo,
+        tree_sha: refData.object.sha,
+        recursive: "true",
+      });
+
+      const tree = data.tree || [];
+      const codeFiles = tree.filter((item) => this.isCodeFile(item.path));
+      const totalFiles = codeFiles.length;
 
       if (totalFiles === 0) {
         throw new Error("No indexable files found");
       }
 
+      console.log(
+        `Found ${totalFiles} code files to index in GitHub repository`
+      );
+
+      // Process files in batches
+      const codebase: Record<string, string> = {};
       let filesProcessed = 0;
 
-      // Process tree with proper progress tracking
-      const codebase = await this.processTree(
-        owner,
-        repo,
-        tree,
-        (progress) => {
-          filesProcessed++;
-          const percentage = filesProcessed / totalFiles;
-          this.progressCallback?.(percentage);
-        }
-      );
+      const batchSize = 5;
+      for (let i = 0; i < codeFiles.length; i += batchSize) {
+        const batch = codeFiles.slice(i, i + batchSize);
 
-      this.codebase = codebase; // Make sure to set the class property
-      return this.codebase;
-    } catch (error) {
-      console.error("Error in indexRepository:", error);
-      throw error; // Re-throw to handle in SecuritySection
-    }
-  }
-
-  private async getRepoTree(owner: string, repo: string, sha: string) {
-    try {
-      const { data } = await this.octokit.rest.git.getTree({
-        owner,
-        repo,
-        tree_sha: sha,
-        recursive: "true",
-      });
-      return data.tree || [];
-    } catch (error) {
-      console.error("Error in getRepoTree:", error);
-      return [];
-    }
-  }
-
-  private async processTree(
-    owner: string,
-    repo: string,
-    tree: any[],
-    progressCallback: (progress: number) => void
-  ) {
-    const codebase: Record<string, string> = {};
-    const processedPaths = new Set<string>();
-
-    // Procesar archivos en chunks
-    const chunks = this.chunkArray(tree, 5); // Procesar 5 archivos a la vez
-    for (const chunk of chunks) {
-      await Promise.all(
-        chunk.map(async (item) => {
-          if (
-            item.type === "blob" &&
-            this.isCodeFile(item.path) &&
-            !processedPaths.has(item.path) &&
-            item.size <= this.maxFileSize
-          ) {
+        await Promise.all(
+          batch.map(async (file) => {
             try {
-              const content = await this.getFileContent(owner, repo, item.path);
-              if (content) {
-                codebase[item.path] = content;
-                processedPaths.add(item.path);
-                progressCallback(1);
+              if (file.type === "blob") {
+                const response = await this.getGitHubFileContent(
+                  owner,
+                  repo,
+                  file.path
+                );
+
+                if (response) {
+                  codebase[file.path] = this.processFileContent(
+                    file.path,
+                    response
+                  );
+                }
               }
             } catch (error) {
-              console.error(`Error processing file ${item.path}:`, error);
+              console.warn(`Error processing file ${file.path}:`, error);
+            } finally {
+              filesProcessed++;
+              const percentage = filesProcessed / totalFiles;
+              this.progressCallback?.(percentage);
             }
-          }
-        })
-      );
-      // Pequeña pausa entre chunks para evitar rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    return codebase;
-  }
-
-  private async getFileContent(
-    owner: string,
-    repo: string,
-    path: string
-  ): Promise<string> {
-    try {
-      const response = await this.octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path,
-      });
-
-      if (
-        "content" in response.data &&
-        typeof response.data.content === "string"
-      ) {
-        const content = Buffer.from(response.data.content, "base64").toString(
-          "utf-8"
+          })
         );
-        // Procesar el contenido en chunks si es muy grande
-        if (content.length > this.chunkSize) {
-          return this.processLargeContent(content);
+
+        // Add a small delay between batches to avoid rate limits
+        if (i + batchSize < codeFiles.length) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
-        return content;
       }
-      return "";
+
+      this.codebase = codebase;
+      return codebase;
     } catch (error) {
-      console.error(`Error fetching content for ${path}:`, error);
-      return "";
+      console.error("Error in indexGitHubRepository:", error);
+      throw error;
     }
   }
 
-  private processLargeContent(content: string): string {
-    // Dividir el contenido en chunks y procesar solo las partes más relevantes
-    const lines = content.split("\n");
-    const totalLines = lines.length;
-    const maxLines = 1000; // Máximo número de líneas a procesar
+  // GitLab implementation - uses fetch API instead of Octokit
+  private async indexGitLabRepository(
+    repoFullName: string
+  ): Promise<Record<string, any>> {
+    try {
+      console.log(`Starting GitLab indexing for ${repoFullName}`);
 
-    if (totalLines > maxLines) {
-      // Tomar el inicio, medio y final del archivo
-      const startLines = lines.slice(0, maxLines / 3);
-      const midLines = lines.slice(
-        Math.floor(totalLines / 2) - maxLines / 6,
-        Math.floor(totalLines / 2) + maxLines / 6
+      // First, get the repository ID if we have the full name
+      const encodedRepo = encodeURIComponent(repoFullName);
+      let projectId: string;
+
+      // Check if it's already a numeric ID
+      if (/^\d+$/.test(repoFullName)) {
+        projectId = repoFullName;
+      } else {
+        // Fetch project ID from name
+        const projectResponse = await fetch(
+          `https://gitlab.com/api/v4/projects/${encodedRepo}`,
+          {
+            headers: {
+              Authorization: `Bearer ${this.accessToken}`,
+            },
+          }
+        );
+
+        if (!projectResponse.ok) {
+          throw new Error(
+            `Failed to get GitLab project: ${projectResponse.statusText}`
+          );
+        }
+
+        const projectData = await projectResponse.json();
+        projectId = projectData.id.toString();
+      }
+
+      // Get default branch
+      const repoInfoResponse = await fetch(
+        `https://gitlab.com/api/v4/projects/${projectId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        }
       );
-      const endLines = lines.slice(totalLines - maxLines / 3);
 
-      return [...startLines, ...midLines, ...endLines].join("\n");
+      if (!repoInfoResponse.ok) {
+        throw new Error(
+          `Failed to get GitLab project info: ${repoInfoResponse.statusText}`
+        );
+      }
+
+      const repoInfo = await repoInfoResponse.json();
+      const defaultBranch = repoInfo.default_branch || "main";
+
+      // Get repository tree using GitLab API
+      console.log(
+        `Getting tree for GitLab project ${projectId}, branch ${defaultBranch}`
+      );
+      let allFiles: any[] = [];
+
+      // Function to recursively fetch directory contents
+      const fetchDirectory = async (path: string = ""): Promise<void> => {
+        const encodedPath = path ? encodeURIComponent(path) : "";
+        const url = `https://gitlab.com/api/v4/projects/${projectId}/repository/tree?path=${encodedPath}&ref=${defaultBranch}&per_page=100`;
+
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch GitLab directory ${path}: ${response.statusText}`
+          );
+        }
+
+        const items = await response.json();
+
+        for (const item of items) {
+          const itemPath = path ? `${path}/${item.name}` : item.name;
+
+          if (item.type === "tree") {
+            // Recursively fetch subdirectories
+            await fetchDirectory(itemPath);
+          } else if (item.type === "blob") {
+            // Add file to our list
+            allFiles.push({
+              type: "blob",
+              path: itemPath,
+            });
+          }
+        }
+      };
+
+      // Start recursive fetching
+      await fetchDirectory();
+
+      // Filter to only include code files
+      const codeFiles = allFiles.filter((item) => this.isCodeFile(item.path));
+
+      if (codeFiles.length === 0) {
+        throw new Error("No indexable files found in GitLab repository");
+      }
+
+      console.log(
+        `Found ${codeFiles.length} code files to index in GitLab repository`
+      );
+
+      // Process files in batches
+      const codebase: Record<string, string> = {};
+      let filesProcessed = 0;
+
+      const batchSize = 5;
+      for (let i = 0; i < codeFiles.length; i += batchSize) {
+        const batch = codeFiles.slice(i, i + batchSize);
+
+        await Promise.all(
+          batch.map(async (file) => {
+            try {
+              const encodedPath = encodeURIComponent(file.path);
+              const url = `https://gitlab.com/api/v4/projects/${projectId}/repository/files/${encodedPath}/raw?ref=${defaultBranch}`;
+
+              const response = await fetch(url, {
+                headers: {
+                  Authorization: `Bearer ${this.accessToken}`,
+                },
+              });
+
+              if (response.ok) {
+                codebase[file.path] = this.processFileContent(
+                  file.path,
+                  await response.text()
+                );
+              } else {
+                console.warn(
+                  `Error fetching GitLab file ${file.path}: ${response.statusText}`
+                );
+              }
+            } catch (error) {
+              console.warn(`Error fetching GitLab file ${file.path}:`, error);
+            } finally {
+              filesProcessed++;
+              const percentage = filesProcessed / codeFiles.length;
+              this.progressCallback?.(percentage);
+            }
+          })
+        );
+
+        // Add a small delay between batches to avoid rate limits
+        if (i + batchSize < codeFiles.length) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      this.codebase = codebase;
+      return codebase;
+    } catch (error) {
+      console.error("Error in indexGitLabRepository:", error);
+      throw error;
+    }
+  }
+
+  // Common utility method - REVISE THIS
+  private isCodeFile(path: string): boolean {
+    // Binary files to exclude
+    const excludedExtensions = [
+      "jpg",
+      "jpeg",
+      "wav",
+      "mp3",
+      "mp4",
+      "avi",
+      "mov",
+      "pdf",
+      "css",
+      "scss",
+      "map",
+      "svg",
+      "png",
+      "gif",
+      "bmp",
+      "ico",
+      "pdf",
+      "zip",
+      "tar",
+      "gz",
+      "rar",
+      "mp3",
+      "mp4",
+      "avi",
+      "mkv",
+      "min.js",
+      "slim.js",
+      "min.css",
+      "mov",
+      "flv",
+      "exe",
+      "dll",
+      "so",
+      "o",
+      "ttf",
+      "woff",
+      "woff2",
+      "eot",
+    ];
+
+    // These paths should be excluded
+    const excludedPaths = [
+      "node_modules/",
+      "dist/",
+      "build/",
+      ".git/",
+      "vendor/",
+      "coverage/",
+    ];
+
+    // Check if path contains any excluded directory
+    if (excludedPaths.some((excluded) => path.includes(excluded))) {
+      return false;
+    }
+
+    // Check if file has any excluded extension
+    if (
+      excludedExtensions.some((ext) => path.toLowerCase().endsWith(`.${ext}`))
+    ) {
+      return false;
+    }
+
+    // Always include security-relevant files
+    const securityRelevantPatterns = [
+      "auth",
+      "security",
+      "login",
+      "password",
+      "token",
+      "jwt",
+      "oauth",
+      "permission",
+      "role",
+      "encrypt",
+      "decrypt",
+      "hash",
+      "config",
+      "env",
+      "docker",
+      "k8s",
+      "kube",
+      "deployment",
+    ];
+
+    const lowerPath = path.toLowerCase();
+    const isSecurityRelevant = securityRelevantPatterns.some((pattern) =>
+      lowerPath.includes(pattern)
+    );
+
+    if (isSecurityRelevant) {
+      return true;
+    }
+
+    return true;
+  }
+
+  // Add a method to handle large files by truncating them
+  private processFileContent(path: string, content: string): string {
+    // Define size limits based on file type
+    const MAX_FILE_SIZE = 500000; // 500KB general limit
+    const MAX_CONFIG_SIZE = 1000000; // 1MB for config files
+
+    if (!content) return "";
+
+    // Determine if this is a config file
+    const isConfigFile = [
+      ".json",
+      ".yml",
+      ".yaml",
+      ".xml",
+      ".config",
+      ".env",
+    ].some((ext) => path.toLowerCase().endsWith(ext));
+
+    const maxSize = isConfigFile ? MAX_CONFIG_SIZE : MAX_FILE_SIZE;
+
+    // Truncate if too large
+    if (content.length > maxSize) {
+      return (
+        content.substring(0, maxSize) +
+        `\n\n// ... content truncated (${(content.length / 1024).toFixed(
+          1
+        )}KB total) ...\n`
+      );
     }
 
     return content;
   }
 
-  private chunkArray<T>(array: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < array.length; i += size) {
-      chunks.push(array.slice(i, i + size));
+  // En el método getGitHubFileContent de la clase CodeIndexer
+  private async getGitHubFileContent(
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<string> {
+    try {
+      const octokit = new Octokit({
+        auth: this.accessToken,
+      });
+
+      try {
+        // Primero intenta obtener el contenido RAW
+        const response = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          headers: {
+            accept: "application/vnd.github.v3.raw",
+          },
+        });
+
+        // Si la respuesta es una cadena directamente, devuélvela
+        if (typeof response.data === "string") {
+          return response.data;
+        }
+
+        throw new Error("Expected raw content but got another format");
+      } catch (error) {
+        // Si falla, intenta el método estándar para manejar contenido base64
+        console.log(
+          `Raw fetch failed for ${path}, trying with base64 handling`
+        );
+
+        const response = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+        });
+
+        // Verificar si es un objeto con contenido codificado en base64
+        if (
+          response.data &&
+          "content" in response.data &&
+          "encoding" in response.data
+        ) {
+          const { content, encoding } = response.data as {
+            content: string;
+            encoding: string;
+          };
+
+          if (encoding === "base64") {
+            return Buffer.from(content, "base64").toString("utf-8");
+          }
+        }
+
+        console.warn(`Unexpected response format for file: ${path}`);
+        return "";
+      }
+    } catch (error) {
+      console.error(`Error fetching content for ${path}:`, error);
+      return "";
     }
-    return chunks;
-  }
-
-  private isCodeFile(path: string): boolean {
-    const extensions = [
-      ".ts",
-      ".tsx",
-      ".js",
-      ".jsx",
-      ".py",
-      ".java",
-      ".go",
-      ".rs",
-      ".md",
-      ".json",
-      ".yml",
-      ".yaml",
-      ".css",
-      ".scss",
-      ".html",
-      ".xml",
-      ".sh",
-      ".bash",
-      ".sql",
-      ".gitignore",
-      ".env.example",
-      ".dockerignore",
-      "Dockerfile",
-      "LICENSE",
-      ".cpp",
-      ".c",
-      ".h",
-      ".hpp",
-      ".cs",
-      ".rb",
-      ".php",
-    ];
-
-    // Si no tiene extensión, verificar si es un archivo especial
-    if (!path.includes(".")) {
-      const specialFiles = [
-        "Dockerfile",
-        "LICENSE",
-        ".gitignore",
-        ".env.example",
-        ".dockerignore",
-      ];
-      return specialFiles.some((file) => path.endsWith(file));
-    }
-
-    return extensions.some((ext) => path.toLowerCase().endsWith(ext));
   }
 }

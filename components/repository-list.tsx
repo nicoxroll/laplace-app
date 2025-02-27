@@ -1,12 +1,10 @@
 "use client";
 
 import { useRepository } from "@/contexts/repository-context";
+import { ChatService } from "@/services/chat-service";
 import { RepositoryService } from "@/services/repository-service";
 import type { Repository } from "@/types/repository";
-import {
-  GitHub,
-  Search as SearchIcon,
-} from "@mui/icons-material";
+import { GitHub, Search as SearchIcon } from "@mui/icons-material";
 import {
   Box,
   InputAdornment,
@@ -14,9 +12,9 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Gitlab } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { Gitlab } from "lucide-react";
 
 export function RepositoryList() {
   const { data: session } = useSession();
@@ -52,7 +50,18 @@ export function RepositoryList() {
   );
 
   const handleRepositorySelect = (repo: Repository) => {
+    // Reset any existing state first
     resetContext();
+
+    // Clear any existing code indexer if it's for a different provider
+    const chatService = ChatService.getInstance();
+    const currentIndexer = chatService.getCodeIndexer();
+
+    if (currentIndexer && currentIndexer.provider !== repo.provider) {
+      chatService.clearCodeIndexer(); // Add this method to ChatService
+    }
+
+    // Now set the selected repo
     setSelectedRepo(repo);
   };
 

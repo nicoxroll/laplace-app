@@ -1,18 +1,20 @@
 export async function POST(req: Request) {
   try {
-    // Extract from request - handle both formats that might be sent
+    // Extract from request
     const reqBody = await req.json();
-    
+
     // Log what we received to help with debugging
     console.log("Analyze API received:", {
       hasContext: !!reqBody.context,
       hasRepoContext: !!reqBody.repoContext,
-      analysisType: reqBody.analysisType
+      analysisType: reqBody.analysisType,
+      fileCount: (reqBody.context?.files || reqBody.repoContext?.files || [])
+        .length,
     });
-    
+
     // Get the appropriate context object (either context or repoContext)
     const contextObj = reqBody.context || reqBody.repoContext;
-    
+
     if (!contextObj || !contextObj.repository) {
       console.error("Missing repository information in request");
       return Response.json(
@@ -20,33 +22,90 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    
+
     // Extract repository information
     const repository = contextObj.repository.full_name;
     const provider = contextObj.provider || "github";
-    
-    // Extract file contents - combine all files into a single content structure
+
+    // Get all files from the context
     const files = contextObj.files || [];
     const currentFile = contextObj.currentFile;
-    
-    // Add current file to the files array if it exists and isn't already included
-    if (currentFile && currentFile.content && !files.some(f => f.path === currentFile.path)) {
+
+    // Add current file if it's not already included
+    if (
+      currentFile &&
+      currentFile.content &&
+      !files.some((f) => f.path === currentFile.path)
+    ) {
       files.push(currentFile);
     }
-    
-    // Format contents as a string representation of file paths and contents
-    const contents = files.map(file => 
-      `File: ${file.path}\n\`\`\`${file.language || 'text'}\n${file.content || ''}\n\`\`\`\n`
-    ).join("\n");
-    
-    console.log(`Analyzing repository: ${repository} with ${files.length} files`);
-    
-    if (!contents.trim()) {
-      console.warn("No file contents provided for analysis");
+
+    console.log(
+      `Analyzing repository: ${repository} with ${files.length} files`
+    );
+
+    // Prepare the file content for analysis - handle large files better
+    let contents = "";
+
+    // Track file sizes for logging
+    let totalContentSize = 0;
+    const sizesLog = [];
+
+    // Process files with better organization
+    files.forEach((file) => {
+      // Make sure file has content
+      if (!file.content) return;
+
+      // Track file size
+      const fileSize = file.content.length;
+      totalContentSize += fileSize;
+      sizesLog.push({
+        path: file.path,
+        size: `${(fileSize / 1024).toFixed(1)}KB`,
+      });
+
+      // Truncate very large files (over 100KB)
+      let processedContent = file.content;
+      if (fileSize > 100000) {
+        processedContent =
+          file.content.substring(0, 100000) +
+          `\n\n// ... content truncated (${(fileSize / 1024).toFixed(
+            1
+          )}KB total) ...\n`;
+        console.log(
+          `Truncated large file: ${file.path} (${(fileSize / 1024).toFixed(
+            1
+          )}KB)`
+        );
+      }
+
+      contents += `\nFile: ${file.path}\n\`\`\`${
+        file.language || "text"
+      }\n${processedContent}\n\`\`\`\n\n`;
+    });
+
+    // Log file size information
+    console.log(
+      `Total content size: ${(totalContentSize / 1024 / 1024).toFixed(2)}MB`
+    );
+    console.log(`Processed ${files.length} files for analysis`);
+
+    if (files.length > 10) {
+      console.log(
+        "Largest files:",
+        sizesLog.sort((a, b) => parseInt(b.size) - parseInt(a.size)).slice(0, 5)
+      );
     }
 
+    if (!contents.trim()) {
+      console.warn("No file contents provided for analysis");
+      contents = "No file contents available for analysis.";
+    }
+
+    // Continue with the API call
     const response = await fetch(
-      process.env.API_URL || "http://localhost:1234/v1/chat/completions",
+      process.env.NEXT_PUBLIC_API_URL ||
+        "http://localhost:1234/v1/chat/completions",
       {
         method: "POST",
         headers: {
@@ -100,7 +159,7 @@ ${contents}`,
           model: "deepseek-coder",
           stream: true,
           temperature: 0.7,
-          max_tokens: 2000,
+          max_tokens: 4000,
         }),
       }
     );

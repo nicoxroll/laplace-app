@@ -5,12 +5,14 @@ import {
   RepositoryFile,
   RepositoryProvider,
 } from "@/types/repository";
+import { Octokit } from "@octokit/rest";
 import { Session } from "next-auth";
 import {
   GitHubRepository,
   GitLabRepository,
   Repository,
 } from "../types/repository";
+
 export class RepositoryService {
   private static instance: RepositoryService;
   private context: RepositoryContext | null = null;
@@ -420,7 +422,7 @@ export class RepositoryService {
           );
 
           const repoData = await repoInfo.json();
-          
+
           if (repoData.size === 0) {
             console.log("Repository is empty");
             return [];
@@ -442,7 +444,9 @@ export class RepositoryService {
           }
 
           if (!response.ok) {
-            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+            throw new Error(
+              `GitHub API error: ${response.status} ${response.statusText}`
+            );
           }
 
           const data = await response.json();
@@ -468,49 +472,275 @@ export class RepositoryService {
 
   async fetchFileContent(
     repository: Repository,
-    token: string,
-    path: string,
-    ref: string
-  ): Promise<string[]> {
+    accessToken: string,
+    path: string
+  ): Promise<string> {
     try {
-      if (repository.provider === "gitlab") {
-        const encodedPath = encodeURIComponent(path);
-        const response = await fetch(
-          `https://gitlab.com/api/v4/projects/${repository.id}/repository/files/${encodedPath}/raw?ref=${ref}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const content = await response.text();
-          return content.split("\n");
-        }
-      } else {
-        // Existing GitHub code
-        const [owner, repo] = repository.full_name.split("/");
-        const response = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${ref}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github.v3.raw",
-            },
-          }
-        );
-
-        if (response.ok) {
-          const content = await response.text();
-          return content.split("\n");
-        }
+      if (!repository || !accessToken || !path) {
+        throw new Error("Missing required parameters");
       }
-      return [];
+
+      if (repository.provider === "github") {
+        const [owner, repo] = repository.full_name.split("/");
+        const octokit = new Octokit({ auth: accessToken });
+
+        try {
+          // Primer intento: solicitar contenido RAW directamente
+          const response = await octokit.repos.getContent({
+            owner,
+            repo,
+            path,
+            headers: {
+              accept: "application/vnd.github.v3.raw",
+            },
+          });
+
+          if (typeof response.data === "string") {
+            return response.data;
+          }
+
+          throw new Error("Expected string content but got another format");
+        } catch (error) {
+          // Si falla, intentar el método estándar y manejar base64
+          console.log(`Raw fetch failed for ${path}, trying standard method`);
+
+          const response = await octokit.repos.getContent({
+            owner,
+            repo,
+            path,
+          });
+
+          // Verificar si la respuesta es un objeto con contenido en base64
+          if (
+            response.data &&
+            "content" in response.data &&
+            "encoding" in response.data
+          ) {
+            const content = response.data.content;
+            const encoding = response.data.encoding;
+
+            if (encoding === "base64") {
+              return Buffer.from(content, "base64").toString("utf-8");
+            }
+          }
+
+          throw new Error(`Unable to decode content for ${path}`);
+        }
+      } else if (repository.provider === "gitlab") {
+        // Mantener el código existente para GitLab
+        const projectId = repository.id;
+        const encodedPath = encodeURIComponent(path);
+
+        const response = await fetch(
+          `https://gitlab.com/api/v4/projects/${projectId}/repository/files/${encodedPath}/raw?ref=${repository.default_branch}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch GitLab file: ${response.statusText}`
+          );
+        }
+
+        return await response.text();
+      }
+
+      throw new Error(`Unsupported provider: ${repository.provider}`);
     } catch (error) {
-      console.error("Error fetching file content:", error);
+      console.error(`Error fetching file content for ${path}:`, error);
+      return `Error loading file: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`;
+    }
+  }
+
+  async fetchFileTree(repo: Repository, accessToken: string): Promise<any[]> {
+    if (!repo || !accessToken) return [];
+
+    // Use different strategies based on provider
+    if (repo.provider === "github") {
+      return this.fetchGitHubFileTree(repo, accessToken);
+    } else if (repo.provider === "gitlab") {
+      return this.fetchGitLabFileTree(repo, accessToken);
+    }
+
+    return [];
+  }
+
+  private async fetchGitHubFileTree(
+    repo: Repository,
+    accessToken: string
+  ): Promise<any[]> {
+    try {
+      console.log("Fetching GitHub file tree using recursive strategy");
+      const octokit = new Octokit({ auth: accessToken });
+
+      // Parse repository information
+      const [owner, repoName] = repo.full_name.split("/");
+
+      // First, get the default branch reference SHA
+      const { data: repoData } = await octokit.repos.get({
+        owner,
+        repo: repoName,
+      });
+
+      const defaultBranch = repoData.default_branch || "main";
+
+      // Get the reference SHA
+      const { data: refData } = await octokit.git.getRef({
+        owner,
+        repo: repoName,
+        ref: `heads/${defaultBranch}`,
+      });
+
+      const commitSha = refData.object.sha;
+
+      // Get the complete tree recursively in ONE API call - this is key!
+      const { data: treeData } = await octokit.git.getTree({
+        owner,
+        repo: repoName,
+        tree_sha: commitSha,
+        recursive: "true", // Esta es la parte crucial que recupera todo el árbol
+      });
+
+      if (treeData.truncated) {
+        console.warn(
+          "⚠️ GitHub tree response was truncated - repository might be too large"
+        );
+      }
+
+      // Process the tree into the format expected by your application
+      return this.processGitHubTree(treeData.tree);
+    } catch (error) {
+      console.error("Error fetching GitHub file tree:", error);
       return [];
     }
+  }
+
+  private processGitHubTree(tree: any[]): any[] {
+    // First, organize items by path
+    const fileMap = new Map();
+    const rootItems = [];
+
+    // Sort items so directories come before files
+    tree.sort((a, b) => {
+      const aIsBlob = a.type === "blob";
+      const bIsBlob = b.type === "blob";
+      if (aIsBlob && !bIsBlob) return 1;
+      if (!aIsBlob && bIsBlob) return -1;
+      return a.path.localeCompare(b.path);
+    });
+
+    // Process each tree item
+    tree.forEach((item) => {
+      const path = item.path;
+      const parts = path.split("/");
+      const name = parts[parts.length - 1];
+
+      // Create item object
+      const treeItem = {
+        name,
+        path,
+        type: item.type === "blob" ? "file" : "dir",
+        sha: item.sha,
+        size: item.size,
+        children: item.type === "tree" ? [] : undefined,
+      };
+
+      // Add to map for lookup
+      fileMap.set(path, treeItem);
+
+      // If this is a top-level item, add to rootItems
+      if (parts.length === 1) {
+        rootItems.push(treeItem);
+      } else {
+        // This is a nested item - find parent directory
+        const parentPath = parts.slice(0, -1).join("/");
+        const parentItem = fileMap.get(parentPath);
+
+        // Add to parent's children if parent exists
+        if (parentItem && parentItem.children) {
+          parentItem.children.push(treeItem);
+        }
+      }
+    });
+
+    return rootItems;
+  }
+
+  private async fetchGitLabFileTree(
+    repo: Repository,
+    accessToken: string
+  ): Promise<any[]> {
+    // Keep existing GitLab implementation
+    try {
+      console.log("Fetching GitLab file tree");
+      const projectId = repo.id;
+
+      const response = await fetch(
+        `https://gitlab.com/api/v4/projects/${projectId}/repository/tree?recursive=true&per_page=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch GitLab tree: ${response.statusText}`);
+      }
+
+      const items = await response.json();
+      return this.processGitLabTree(items);
+    } catch (error) {
+      console.error("Error fetching GitLab file tree:", error);
+      return [];
+    }
+  }
+
+  private processGitLabTree(items: any[]): any[] {
+    // Similar processing for GitLab items
+    const fileMap = new Map();
+    const rootItems = [];
+
+    items.sort((a, b) => {
+      if (a.type === "tree" && b.type === "blob") return -1;
+      if (a.type === "blob" && b.type === "tree") return 1;
+      return a.path.localeCompare(b.path);
+    });
+
+    items.forEach((item) => {
+      const path = item.path;
+      const parts = path.split("/");
+      const name = parts[parts.length - 1];
+
+      const treeItem = {
+        name,
+        path,
+        type: item.type === "blob" ? "file" : "dir",
+        id: item.id,
+        children: item.type === "tree" ? [] : undefined,
+      };
+
+      fileMap.set(path, treeItem);
+
+      if (parts.length === 1) {
+        rootItems.push(treeItem);
+      } else {
+        const parentPath = parts.slice(0, -1).join("/");
+        const parentItem = fileMap.get(parentPath);
+
+        if (parentItem && parentItem.children) {
+          parentItem.children.push(treeItem);
+        }
+      }
+    });
+
+    return rootItems;
   }
 }
 
