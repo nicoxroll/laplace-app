@@ -127,25 +127,36 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchFileContent = async (path: string, ref?: string) => {
+  const fetchFileContent = useCallback(async (path: string, ref?: string) => {
     if (!selectedRepo || !session?.user?.accessToken) return;
 
     setIsLoading(true);
     try {
+      const fileRef = ref || currentCommit || currentBranch || selectedRepo.default_branch;
       const content = await repositoryService.fetchFileContent(
         selectedRepo,
         session.user.accessToken,
         path,
-        ref || currentBranch || selectedRepo.default_branch
+        fileRef
       );
-      setFileContent(content);
-      setCurrentPath(path);
+
+      if (content.length > 0) {
+        setFileContent(content);
+        setCurrentPath(path);
+        setCurrentFile({
+          path,
+          content,
+          encoding: "utf-8"
+        });
+      }
     } catch (error) {
       console.error("Error fetching file content:", error);
+      setFileContent([]);
+      setCurrentFile(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedRepo, session?.user?.accessToken, currentCommit, currentBranch, repositoryService]);
 
   const fetchTreeContents = async (path: string = "") => {
     if (!session?.user?.accessToken || !selectedRepo) return;
@@ -229,13 +240,13 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const handleTreeItemClick = async (item: TreeItem) => {
+  const handleTreeItemClick = useCallback(async (item: TreeItem) => {
     if (item.type === "dir") {
       await fetchTreeContents(item.path);
-    } else {
+    } else if (item.path !== currentPath) {
       await fetchFileContent(item.path);
     }
-  };
+  }, [currentPath, fetchFileContent, fetchTreeContents]);
 
   const handleTreeBack = () => {
     const parentPath = currentFolder.split("/").slice(0, -1).join("/");
@@ -252,27 +263,28 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
 
   // Effect for fetching commits when branch changes
   useEffect(() => {
-    if (currentBranch) {
+    if (currentBranch && selectedRepo) {
       fetchCommits(currentBranch);
     }
-  }, [currentBranch]);
+  }, [currentBranch, selectedRepo]);
 
   // Reset tree when repository changes
   useEffect(() => {
-    setTree([]);
-    setCurrentFolder("");
-    setSearchTerm("");
     if (selectedRepo) {
+      setTree([]);
+      setCurrentFolder("");
+      setSearchTerm("");
       fetchTreeContents();
     }
   }, [selectedRepo]);
 
   // Update tree when branch or commit changes
   useEffect(() => {
-    if (selectedRepo) {
+    const ref = currentCommit || currentBranch;
+    if (selectedRepo && ref && currentFolder !== undefined) {
       fetchTreeContents(currentFolder);
     }
-  }, [currentBranch, currentCommit]);
+  }, [currentBranch, currentCommit, selectedRepo, currentFolder]);
 
   return (
     <RepositoryContext.Provider

@@ -55,7 +55,7 @@ export function FileTree() {
         {currentFolder && (
           <ListItemButton onClick={handleTreeBack}>
             <ListItemIcon>
-              <ArrowBack fontSize="small" />
+              <ArrowBack fontSize="small" sx={{ color: "#58a6ff" }} />
             </ListItemIcon>
             <ListItemText
               primary={`Back to ${
@@ -72,9 +72,9 @@ export function FileTree() {
           >
             <ListItemIcon>
               {item.type === "dir" ? (
-                <Folder fontSize="small" />
+                <Folder fontSize="small" sx={{ color: "#58a6ff" }} />
               ) : (
-                <InsertDriveFile fontSize="small" />
+                <InsertDriveFile fontSize="small" sx={{ color: "#e6edf3" }} />
               )}
             </ListItemIcon>
             <ListItemText primary={item.name} />
