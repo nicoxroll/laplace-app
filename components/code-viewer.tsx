@@ -5,29 +5,27 @@ import { FileService } from "@/services/file-service";
 import { RepositoryService } from "@/services/repository-service";
 import type { Branch, Commit } from "@/types/repository";
 import {
-  Archive,
-  Check,
-  Copy,
-  Download,
-  Maximize2,
-  Minimize2,
-  History,
-  Menu,
-  FileCode,
-  GitBranch,
-  Loader2
-} from "lucide-react";
-import {
   AppBar,
   Box,
   Button,
-  Drawer,
   IconButton,
   MenuItem,
   Paper,
   Toolbar,
   Typography,
 } from "@mui/material";
+import {
+  Check,
+  Copy,
+  Download,
+  FileCode,
+  GitBranch,
+  History,
+  Loader2,
+  Maximize2,
+  Menu,
+  Minimize2,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -289,21 +287,22 @@ export function CodeViewer() {
     if (!currentPath || !fileContent) return null;
 
     // Asegurarnos de que fileContent sea un string
-    const contentString = Array.isArray(fileContent) ? fileContent.join('\n') : fileContent;
-    const lines = contentString.split('\n').length;
+    const contentString = Array.isArray(fileContent)
+      ? fileContent.join("\n")
+      : fileContent;
+    const lines = contentString.split("\n").length;
     const bytes = new TextEncoder().encode(contentString).length;
-    const formattedSize = bytes < 1024 
-      ? `${bytes} B` 
-      : `${(bytes / 1024).toFixed(1)} KB`;
+    const formattedSize =
+      bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 
     return (
-      <Typography 
-        variant="caption" 
-        sx={{ 
+      <Typography
+        variant="caption"
+        sx={{
           color: "text.secondary",
           display: "flex",
           alignItems: "center",
-          gap: 1
+          gap: 1,
         }}
       >
         {currentPath} • {lines} lines • {formattedSize}
@@ -334,9 +333,13 @@ export function CodeViewer() {
             "&:hover": { bgcolor: "#30363d" },
           }}
         >
-          <GitBranch sx={{ fontSize: 18 }} />
+          <Box sx={{ fontSize: 18 }}>
+            <GitBranch />
+          </Box>
           <Typography variant="body2">
-            {branches.length > 0 ? currentBranch || selectedRepo?.default_branch : "Sin branches"}
+            {branches.length > 0
+              ? currentBranch || selectedRepo?.default_branch
+              : "Sin branches"}
           </Typography>
         </Button>
         {isBranchesOpen && (
@@ -365,7 +368,8 @@ export function CodeViewer() {
                     py: 1.5,
                     px: 2,
                     color: "text.primary",
-                    bgcolor: currentBranch === branch.name ? "#1c2128" : "transparent",
+                    bgcolor:
+                      currentBranch === branch.name ? "#1c2128" : "transparent",
                     "&:hover": { bgcolor: "#30363d" },
                   }}
                 >
@@ -394,7 +398,14 @@ export function CodeViewer() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        bgcolor: "background.default",
+      }}
+    >
       <AppBar position="static" color="transparent" elevation={0}>
         <Toolbar sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -409,7 +420,13 @@ export function CodeViewer() {
               <Menu size={16} /> {/* Reemplaza MenuIcon */}
             </IconButton>
 
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+              }}
+            >
               {selectedRepo && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <FileCode size={16} /> {/* Reemplaza Source */}
@@ -421,7 +438,7 @@ export function CodeViewer() {
               {renderFileInfo()}
             </Box>
           </Box>
-          
+
           <Box
             sx={{ display: "flex", alignItems: "center", gap: 2, ml: "auto" }}
           >
@@ -449,7 +466,9 @@ export function CodeViewer() {
                   "&:hover": { bgcolor: "#30363d" },
                 }}
               >
-                <History sx={{ fontSize: 18 }} />
+                <Box sx={{ fontSize: 18 }}>
+                  <History />
+                </Box>
                 <Typography variant="body2">
                   {commits.length > 0 ? "History" : "No commits"}
                 </Typography>
@@ -480,16 +499,32 @@ export function CodeViewer() {
                           py: 1.5,
                           px: 2,
                           color: "text.primary",
-                          bgcolor: currentCommit === commit.sha ? "#1c2128" : "transparent",
+                          bgcolor:
+                            currentCommit === commit.sha
+                              ? "#1c2128"
+                              : "transparent",
                           "&:hover": { bgcolor: "#30363d" },
                         }}
                       >
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                          <Typography variant="body2" sx={{ color: "text.primary" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.5,
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{ color: "text.primary" }}
+                          >
                             {commit.message}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                            {commit.author.name} • {new Date(commit.author.date).toLocaleDateString()}
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "text.secondary" }}
+                          >
+                            {commit.author.name} •{" "}
+                            {new Date(commit.author.date).toLocaleDateString()}
                           </Typography>
                         </Box>
                       </MenuItem>
@@ -522,7 +557,8 @@ export function CodeViewer() {
                 "&:hover": { bgcolor: "#30363d" },
               }}
             >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />} {/* Reemplaza Fullscreen y FullscreenExit */}
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}{" "}
+              {/* Reemplaza Fullscreen y FullscreenExit */}
             </IconButton>
 
             <IconButton
@@ -533,7 +569,8 @@ export function CodeViewer() {
                 "&:hover": { bgcolor: "#30363d" },
               }}
             >
-              {copied ? <Check /> : <Copy size={16} />} {/* Reemplaza ContentCopy */}
+              {copied ? <Check /> : <Copy size={16} />}{" "}
+              {/* Reemplaza ContentCopy */}
             </IconButton>
 
             <IconButton
@@ -549,13 +586,13 @@ export function CodeViewer() {
           </Box>
         </Toolbar>
       </AppBar>
-      
-      <Box 
-        sx={{ 
+
+      <Box
+        sx={{
           display: "flex",
           flex: 1,
           position: "relative",
-          overflow: "hidden"
+          overflow: "hidden",
         }}
       >
         <Box

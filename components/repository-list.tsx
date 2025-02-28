@@ -56,8 +56,8 @@ export function RepositoryList() {
     // Clear any existing code indexer if it's for a different provider
     const chatService = ChatService.getInstance();
     const currentIndexer = chatService.getCodeIndexer();
-    
-    if (currentIndexer && currentIndexer.provider !== repo.provider) {
+
+    if (currentIndexer && currentIndexer.getProvider() !== repo.provider) {
       chatService.clearCodeIndexer();
     }
 
@@ -75,10 +75,10 @@ export function RepositoryList() {
         bgcolor: "background.paper",
       }}
     >
-      <Box 
-        sx={{ 
-          p: 2, 
-          borderBottom: 1, 
+      <Box
+        sx={{
+          p: 2,
+          borderBottom: 1,
           borderColor: "divider",
           backgroundColor: "background.paper",
         }}
@@ -102,11 +102,11 @@ export function RepositoryList() {
               borderRadius: 2,
               transition: "all 0.2s",
               "&:hover": {
-                boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.1)"
+                boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.1)",
               },
               "&.Mui-focused": {
-                boxShadow: "0 0 0 2px rgba(58, 108, 217, 0.5)"
-              }
+                boxShadow: "0 0 0 2px rgba(58, 108, 217, 0.5)",
+              },
             },
           }}
         />
@@ -142,7 +142,9 @@ export function RepositoryList() {
               {repo.provider === "github" ? (
                 <GitHub sx={{ color: "text.secondary", mt: 0.5 }} />
               ) : (
-                <Gitlab sx={{ mt: 0.5 }} />
+                <Box sx={{ mt: 0.5 }}>
+                  <Gitlab />
+                </Box>
               )}
               <Box
                 sx={{

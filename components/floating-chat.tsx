@@ -5,6 +5,7 @@ import { useChat } from "@/contexts/chat-context";
 import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
 import { CodeIndexer } from "@/services/code-indexer";
+import { FileType } from "@/types/repository";
 import { Box, Fab, LinearProgress, Paper, useTheme } from "@mui/material"; // Add useTheme here
 import { Bot, Maximize2, Minimize2, X } from "lucide-react";
 import { useSession } from "next-auth/react"; // Add this import
@@ -102,15 +103,17 @@ export function FloatingChat() {
       await chatService.handleSubmit(
         currentInput,
         chatService.formatRepoContext({
-          provider: selectedRepo.provider, // Usar el provider del repo seleccionado
+          provider: selectedRepo.provider,
           repository: selectedRepo,
           currentPath,
+          files: [],
           currentFile:
             fileContent.length > 0
               ? {
                   path: currentPath,
                   content: fileContent,
                   language: currentPath.split(".").pop() || "text",
+                  type: "file" as FileType,
                 }
               : undefined,
         }),

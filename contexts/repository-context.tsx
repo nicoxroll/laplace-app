@@ -26,6 +26,12 @@ interface RepositoryContextType {
   currentFolder: string;
   searchTerm: string;
   isTreeLoading: boolean;
+  currentFile: {
+    path: string;
+    content: string[];
+    language?: string;
+    encoding?: string;
+  } | null;
 
   // Actions
   setSelectedRepo: (repo: Repository | null) => void;
@@ -63,6 +69,12 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
   const [currentFolder, setCurrentFolder] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isTreeLoading, setIsTreeLoading] = useState(false);
+  const [currentFile, setCurrentFile] = useState<{
+    path: string;
+    content: string[];
+    language?: string;
+    encoding?: string;
+  } | null>(null);
 
   const { data: session } = useSession();
   const repositoryService = RepositoryService.getInstance();
@@ -277,6 +289,7 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
         currentFolder,
         searchTerm,
         isTreeLoading,
+        currentFile,
         setSelectedRepo,
         setCurrentPath,
         setFileContent,

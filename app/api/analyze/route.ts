@@ -1,3 +1,8 @@
+interface FileSize {
+  path: string;
+  size: string;
+}
+
 export async function POST(req: Request) {
   try {
     // Extract from request
@@ -35,7 +40,7 @@ export async function POST(req: Request) {
     if (
       currentFile &&
       currentFile.content &&
-      !files.some((f) => f.path === currentFile.path)
+      !files.some((f: { path: string }) => f.path === currentFile.path)
     ) {
       files.push(currentFile);
     }
@@ -49,40 +54,42 @@ export async function POST(req: Request) {
 
     // Track file sizes for logging
     let totalContentSize = 0;
-    const sizesLog = [];
+    const sizesLog: FileSize[] = [];
 
     // Process files with better organization
-    files.forEach((file) => {
-      // Make sure file has content
-      if (!file.content) return;
+    files.forEach(
+      (file: { content?: string; path: string; language?: string }) => {
+        // Make sure file has content
+        if (!file.content) return;
 
-      // Track file size
-      const fileSize = file.content.length;
-      totalContentSize += fileSize;
-      sizesLog.push({
-        path: file.path,
-        size: `${(fileSize / 1024).toFixed(1)}KB`,
-      });
+        // Track file size
+        const fileSize = file.content.length;
+        totalContentSize += fileSize;
+        sizesLog.push({
+          path: file.path,
+          size: `${(fileSize / 1024).toFixed(1)}KB`,
+        });
 
-      // Truncate very large files (over 100KB)
-      let processedContent = file.content;
-      if (fileSize > 100000) {
-        processedContent =
-          file.content.substring(0, 100000) +
-          `\n\n// ... content truncated (${(fileSize / 1024).toFixed(
-            1
-          )}KB total) ...\n`;
-        console.log(
-          `Truncated large file: ${file.path} (${(fileSize / 1024).toFixed(
-            1
-          )}KB)`
-        );
+        // Truncate very large files (over 100KB)
+        let processedContent = file.content;
+        if (fileSize > 100000) {
+          processedContent =
+            file.content.substring(0, 100000) +
+            `\n\n// ... content truncated (${(fileSize / 1024).toFixed(
+              1
+            )}KB total) ...\n`;
+          console.log(
+            `Truncated large file: ${file.path} (${(fileSize / 1024).toFixed(
+              1
+            )}KB)`
+          );
+        }
+
+        contents += `\nFile: ${file.path}\n\`\`\`${
+          file.language || "text"
+        }\n${processedContent}\n\`\`\`\n\n`;
       }
-
-      contents += `\nFile: ${file.path}\n\`\`\`${
-        file.language || "text"
-      }\n${processedContent}\n\`\`\`\n\n`;
-    });
+    );
 
     // Log file size information
     console.log(

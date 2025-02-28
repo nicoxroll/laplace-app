@@ -1,7 +1,7 @@
 "use client";
 
 import { Message } from "@/types/chat";
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -33,7 +33,19 @@ export function MessageRenderer({ message }: { message: Message }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({
+            node,
+            inline,
+            className,
+            children,
+            ...props
+          }: React.DetailedHTMLProps<
+            React.HTMLAttributes<HTMLElement>,
+            HTMLElement
+          > & {
+            inline?: boolean;
+            node?: any;
+          }) {
             const match = /language-(\w+)/.exec(className || "");
             const [copied, setCopied] = useState(false);
 
@@ -76,7 +88,7 @@ export function MessageRenderer({ message }: { message: Message }) {
                       color: "#484f58",
                       textAlign: "right",
                       userSelect: "none",
-                      borderRight: "1px solid #30363d"
+                      borderRight: "1px solid #30363d",
                     }}
                     wrapLines
                     wrapLongLines={false}
@@ -94,7 +106,7 @@ export function MessageRenderer({ message }: { message: Message }) {
                 {children}
               </code>
             );
-          }
+          },
           // ... rest of markdown components
         }}
       >

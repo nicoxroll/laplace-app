@@ -520,4 +520,8 @@ export class CodeIndexer {
       return "";
     }
   }
+
+  public getProvider(): string {
+    return this.provider;
+  }
 }

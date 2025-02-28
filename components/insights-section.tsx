@@ -21,7 +21,11 @@ interface InsightData {
   contributors: number;
 }
 
-export function InsightsSection({ repository }: { repository: Repository }) {
+interface InsightsSectionProps {
+  repository: Repository;
+}
+
+export function InsightsSection({ repository }: InsightsSectionProps) {
   const { data: session, status } = useSession();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

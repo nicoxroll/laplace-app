@@ -37,6 +37,14 @@ export interface Repository {
   default_branch: string;
   private: boolean;
   provider: RepositoryProvider;
+  owner?: {
+    login: string;
+    avatar_url: string;
+  };
+  namespace?: {
+    name: string;
+    avatar_url: string;
+  };
 }
 
 export interface RepositoryFile {
@@ -85,4 +93,10 @@ export interface Commit {
     name: string;
     date: string;
   };
+}
+
+export interface TreeItem {
+  name: string;
+  path: string;
+  type: "dir" | "file";
 }

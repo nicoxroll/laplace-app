@@ -36,12 +36,14 @@ export interface Message {
   };
 }
 
-export interface ChatState {
+export type ChatState = {
   isOpen: boolean;
   isExpanded: boolean;
   messages: Message[];
   loading: boolean;
-}
+  codeIndexReady: boolean;
+  setCodeIndexReady: (ready: boolean) => void;
+};
 
 export interface ChatResponse {
   choices: Array<{

@@ -3,6 +3,7 @@
 import { useChat } from "@/contexts/chat-context";
 import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
+import { Repository } from "@/types/repository";
 import {
   Alert,
   Box,
@@ -34,7 +35,11 @@ interface SecurityReport {
   timestamp: number;
 }
 
-export function SecuritySection() {
+interface SecuritySectionProps {
+  repository: Repository;
+}
+
+export function SecuritySection({ repository }: SecuritySectionProps) {
   const { data: session } = useSession();
   const { selectedRepo, currentPath, fileContent } = useRepository();
   const { state } = useChat();
@@ -88,7 +93,8 @@ export function SecuritySection() {
     for (let i = 0; i < files.length; i += MAX_FILES_PER_CHUNK) {
       const chunkFiles = files.slice(i, i + MAX_FILES_PER_CHUNK);
       const totalSize = chunkFiles.reduce(
-        (size, file) => size + (file.content?.length || 0),
+        (size: number, file: { content?: string }) =>
+          size + (file.content?.length || 0),
         0
       );
 
@@ -341,7 +347,7 @@ export function SecuritySection() {
         full_name: selectedRepo.full_name,
         name: selectedRepo.full_name.split("/")[1] || "repo",
         owner: selectedRepo.full_name.split("/")[0] || "owner",
-        defaultBranch: selectedRepo.defaultBranch || "main",
+        default_branch: selectedRepo.default_branch || "main",
         description: selectedRepo.description || "",
       };
 
@@ -395,8 +401,8 @@ export function SecuritySection() {
         isStreaming: false,
         timestamp: Date.now(),
       });
-    } catch (err) {
-      if (err.name === "AbortError") {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
         setReport({
           content: "# Analysis Cancelled\n\nAnalysis was interrupted by user.",
           isStreaming: false,
@@ -558,7 +564,19 @@ export function SecuritySection() {
         <Box ref={analysisRef} sx={{ mt: 2 }}>
           <ReactMarkdown
             components={{
-              code({ node, inline, className, children, ...props }) {
+              code({
+                node,
+                inline,
+                className,
+                children,
+                ...props
+              }: React.DetailedHTMLProps<
+                React.HTMLAttributes<HTMLElement>,
+                HTMLElement
+              > & {
+                inline?: boolean;
+                node?: any;
+              }) {
                 const match = /language-(\w+)/.exec(className || "");
                 const [copied, setCopied] = useState(false);
 

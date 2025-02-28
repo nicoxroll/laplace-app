@@ -470,11 +470,12 @@ export class RepositoryService {
     }
   }
 
-  async fetchFileContent(
+  public async fetchFileContent(
     repository: Repository,
     accessToken: string,
-    path: string
-  ): Promise<string> {
+    path: string,
+    ref?: string
+  ): Promise<string[]> {
     try {
       if (!repository || !accessToken || !path) {
         throw new Error("Missing required parameters");
@@ -496,7 +497,7 @@ export class RepositoryService {
           });
 
           if (typeof response.data === "string") {
-            return response.data;
+            return [response.data];
           }
 
           throw new Error("Expected string content but got another format");
@@ -520,7 +521,7 @@ export class RepositoryService {
             const encoding = response.data.encoding;
 
             if (encoding === "base64") {
-              return Buffer.from(content, "base64").toString("utf-8");
+              return [Buffer.from(content, "base64").toString("utf-8")];
             }
           }
 
@@ -546,15 +547,17 @@ export class RepositoryService {
           );
         }
 
-        return await response.text();
+        return [await response.text()];
       }
 
       throw new Error(`Unsupported provider: ${repository.provider}`);
     } catch (error) {
       console.error(`Error fetching file content for ${path}:`, error);
-      return `Error loading file: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`;
+      return [
+        `Error loading file: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      ];
     }
   }
 
