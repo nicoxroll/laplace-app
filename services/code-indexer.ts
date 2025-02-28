@@ -5,6 +5,7 @@ export class CodeIndexer {
   private progressCallback?: (progress: number) => void;
   private accessToken: string;
   private provider: string = "github"; // Default to GitHub
+  private lastReportedProgress: number = 0; // Track last reported progress
 
   constructor(token: string) {
     this.accessToken = token;
@@ -12,6 +13,18 @@ export class CodeIndexer {
 
   onProgress(callback: (progress: number) => void) {
     this.progressCallback = callback;
+  }
+
+  // Add a new method to safely update progress
+  private updateProgress(current: number, total: number) {
+    // Calculate current percentage
+    const percentage = Math.min(current / total, 1.0);
+
+    // Only update if it's higher than what we last reported
+    if (percentage > this.lastReportedProgress) {
+      this.lastReportedProgress = percentage;
+      this.progressCallback?.(percentage);
+    }
   }
 
   async indexRepository(
@@ -43,6 +56,9 @@ export class CodeIndexer {
     repoFullName: string
   ): Promise<Record<string, any>> {
     try {
+      // Reset progress tracking for new repository
+      this.lastReportedProgress = 0;
+
       // Create new Octokit instance for GitHub only
       const octokit = new Octokit({
         auth: this.accessToken,
@@ -115,8 +131,8 @@ export class CodeIndexer {
               console.warn(`Error processing file ${file.path}:`, error);
             } finally {
               filesProcessed++;
-              const percentage = filesProcessed / totalFiles;
-              this.progressCallback?.(percentage);
+              // Use the new updateProgress method
+              this.updateProgress(filesProcessed, totalFiles);
             }
           })
         );
@@ -126,6 +142,9 @@ export class CodeIndexer {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
+
+      // Ensure we report 100% when done
+      this.updateProgress(totalFiles, totalFiles);
 
       this.codebase = codebase;
       return codebase;
@@ -140,6 +159,9 @@ export class CodeIndexer {
     repoFullName: string
   ): Promise<Record<string, any>> {
     try {
+      // Reset progress tracking for new repository
+      this.lastReportedProgress = 0;
+
       console.log(`Starting GitLab indexing for ${repoFullName}`);
 
       // First, get the repository ID if we have the full name
@@ -278,8 +300,8 @@ export class CodeIndexer {
               console.warn(`Error fetching GitLab file ${file.path}:`, error);
             } finally {
               filesProcessed++;
-              const percentage = filesProcessed / codeFiles.length;
-              this.progressCallback?.(percentage);
+              // Use the new updateProgress method
+              this.updateProgress(filesProcessed, codeFiles.length);
             }
           })
         );
@@ -289,6 +311,9 @@ export class CodeIndexer {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
+
+      // Ensure we report 100% when done
+      this.updateProgress(codeFiles.length, codeFiles.length);
 
       this.codebase = codebase;
       return codebase;

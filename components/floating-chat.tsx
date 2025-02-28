@@ -1,17 +1,16 @@
 "use client";
 
+import { ChatInput } from "@/components/chat/chat-input";
 import { useChat } from "@/contexts/chat-context";
 import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
-import { ChatInput } from "@/components/chat/chat-input";
-import { Box, Fab, IconButton, Paper, LinearProgress, useTheme } from "@mui/material"; // Add useTheme here
-import { Bot, Send, StopCircle, Maximize2, Minimize2, X } from "lucide-react";
+import { CodeIndexer } from "@/services/code-indexer";
+import { Box, Fab, LinearProgress, Paper, useTheme } from "@mui/material"; // Add useTheme here
+import { Bot, Maximize2, Minimize2, X } from "lucide-react";
+import { useSession } from "next-auth/react"; // Add this import
 import { Resizable } from "re-resizable";
 import { useEffect, useRef, useState } from "react";
 import { MessageRenderer } from "./chat/message-renderer";
-import { useSession } from "next-auth/react"; // Add this import
-import { CodeIndexer } from "@/services/code-indexer";
-
 
 export function FloatingChat() {
   const { data: session } = useSession(); // Add this line
@@ -48,9 +47,11 @@ export function FloatingChat() {
 
   useEffect(() => {
     if (selectedRepo && session?.user?.accessToken) {
+      // Pass the repository provider to ensure GitLab repos don't use Octokit
       chatService.initializeCodeIndexer(
         session.user.accessToken,
-        selectedRepo.full_name
+        selectedRepo.full_name,
+        selectedRepo.provider // Add this line to explicitly pass the provider
       );
     }
   }, [selectedRepo, session?.user?.accessToken]);
@@ -61,13 +62,15 @@ export function FloatingChat() {
       setIndexProgress(0);
 
       const indexer = new CodeIndexer(session.user.accessToken);
-      
+
       indexer.onProgress((progress) => {
         const percentage = Math.round(progress * 100);
         setIndexProgress(percentage);
       });
 
-      indexer.indexRepository(selectedRepo.full_name)
+      // Pass the provider here too
+      indexer
+        .indexRepository(selectedRepo.full_name, selectedRepo.provider)
         .then(() => {
           chatService.setCodeIndexer(indexer);
           state.setCodeIndexReady(true);
@@ -87,11 +90,11 @@ export function FloatingChat() {
 
     const userMessage = { role: "user" as const, content: input };
     const controller = new AbortController();
-    
+
     setAbortController(controller);
     dispatch({ type: "SET_LOADING", payload: true });
     dispatch({ type: "ADD_MESSAGE", payload: userMessage });
-    
+
     const currentInput = input;
     setInput("");
 
@@ -102,41 +105,44 @@ export function FloatingChat() {
           provider: selectedRepo.provider, // Usar el provider del repo seleccionado
           repository: selectedRepo,
           currentPath,
-          currentFile: fileContent.length > 0 ? {
-            path: currentPath,
-            content: fileContent,
-            language: currentPath.split('.').pop() || 'text'
-          } : undefined
+          currentFile:
+            fileContent.length > 0
+              ? {
+                  path: currentPath,
+                  content: fileContent,
+                  language: currentPath.split(".").pop() || "text",
+                }
+              : undefined,
         }),
         controller.signal,
         () => {
           dispatch({
             type: "ADD_MESSAGE",
-            payload: { 
-              role: "assistant", 
+            payload: {
+              role: "assistant",
               content: "",
               context: {
                 repository: selectedRepo,
                 currentFile: currentPath ? { path: currentPath } : undefined,
-              }
-            }
+              },
+            },
           });
         },
         (content) => {
           dispatch({
             type: "UPDATE_LAST_MESSAGE",
-            payload: content
+            payload: content,
           });
         }
       );
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
+      if ((error as Error).name !== "AbortError") {
         dispatch({
           type: "ADD_MESSAGE",
           payload: {
             role: "assistant",
-            content: "Sorry, I encountered an error. Please try again."
-          }
+            content: "Sorry, I encountered an error. Please try again.",
+          },
         });
       }
     } finally {
@@ -156,10 +162,14 @@ export function FloatingChat() {
     });
 
     // Ajustar la posición cuando se redimensiona hacia la izquierda
-    if (direction === 'left' || direction === 'topLeft' || direction === 'bottomLeft') {
+    if (
+      direction === "left" ||
+      direction === "topLeft" ||
+      direction === "bottomLeft"
+    ) {
       const boxElement = ref.parentElement;
       if (boxElement) {
-        const currentRight = parseInt(boxElement.style.right || '32');
+        const currentRight = parseInt(boxElement.style.right || "32");
         boxElement.style.right = `${currentRight}px`;
       }
     }
@@ -281,13 +291,13 @@ export function FloatingChat() {
                 <LinearProgress
                   variant="determinate"
                   value={indexProgress}
-                  sx={{ 
+                  sx={{
                     height: 2,
                     borderRadius: 1,
                     backgroundColor: theme.palette.action.selected,
-                    '& .MuiLinearProgress-bar': {
-                      borderRadius: 1
-                    }
+                    "& .MuiLinearProgress-bar": {
+                      borderRadius: 1,
+                    },
                   }}
                 />
               )}

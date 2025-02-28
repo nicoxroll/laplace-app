@@ -37,6 +37,10 @@ export default function HomePage() {
     return null;
   }
 
+  const toggleSidebar = () => {
+    setShowSidebar(!showSidebar);
+  };
+
   const renderSection = () => {
     if (!selectedRepo) {
       return (
@@ -85,35 +89,48 @@ export default function HomePage() {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         showSidebar={showSidebar}
-        onToggleSidebar={() => setShowSidebar(!showSidebar)}
+        onToggleSidebar={toggleSidebar}
       />
       <Box
         sx={{
           display: "flex",
           flexGrow: 1,
           pt: "64px", // Altura del AppBar
-          overflow: "hidden",
+          overflow: "hidden", // Importante para contener la animación
         }}
       >
-        {showSidebar && (
-          <Box
-            sx={{
-              width: 300,
-              flexShrink: 0,
-              borderRight: 1,
-              borderColor: "divider",
-              bgcolor: "background.paper",
-              overflow: "auto",
-            }}
-          >
-            <RepositoryList />
-          </Box>
-        )}
+        {/* Sidebar con RepositoryList */}
+        <Box
+          sx={{
+            width: 300,
+            height: "100vh",
+            flexShrink: 0,
+            borderRight: 1,
+            borderColor: "divider",
+            bgcolor: "background.paper",
+            position: "fixed",
+            left: 0, 
+            top: 0,
+            pt: "64px", // Altura del header
+            transform: showSidebar ? "translateX(0)" : "translateX(-100%)",
+            transition: "transform 0.3s ease-in-out",
+            zIndex: 10,
+            overflowY: "hidden", // Importante: contenedor principal sin scroll
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
+          <RepositoryList />
+        </Box>
+        
+        {/* Contenido principal */}
         <Box
           sx={{
             flexGrow: 1,
             p: 3,
             overflow: "auto",
+            transition: "margin-left 0.3s ease-in-out",
+            marginLeft: showSidebar ? "300px" : 0, // Usar margin en lugar de transformación negativa
           }}
         >
           {renderSection()}

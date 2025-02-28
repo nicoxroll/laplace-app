@@ -3,7 +3,6 @@
 import { useChat } from "@/contexts/chat-context";
 import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
-import { Shield, X, Check, Copy, RefreshCw } from "lucide-react";
 import {
   Alert,
   Box,
@@ -14,16 +13,12 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
+import { Check, Copy, RefreshCw, Shield, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Security } from "@mui/icons-material";
-import { match } from "assert";
-import { error } from "console";
-import { report } from "process";
-import style from "styled-jsx/style";
 
 const StyledContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -250,11 +245,15 @@ export function SecuritySection() {
         `Initializing indexer for ${selectedRepo.provider} repository: ${selectedRepo.full_name}`
       );
 
-      // Initialize the code indexer through the service, passing the provider explicitly
+      // Pass the progress callback directly to the ChatService method
       await chatService.initializeCodeIndexer(
         session.user.accessToken,
         selectedRepo.full_name,
-        selectedRepo.provider // Make sure the provider is passed correctly
+        selectedRepo.provider,
+        (progress) => {
+          const percentage = Math.round(progress * 100);
+          setIndexProgress(percentage);
+        }
       );
 
       const updatedIndexer = chatService.getCodeIndexer();

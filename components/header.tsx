@@ -1,6 +1,5 @@
 "use client";
 
-import { Repository } from "@/types/repository";
 import {
   AppBar,
   Avatar,
@@ -25,13 +24,6 @@ import {
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
-import { AgentsSection } from "./agents-section";
-import { CodeSection } from "./code-section";
-import { InsightsSection } from "./insights-section";
-import { IssuesSection } from "./issues-section";
-import { PullRequestsSection } from "./pull-requests-section";
-import { RepositoryList } from "./repository-list";
-import { SecuritySection } from "./security-section";
 
 export function Header({
   activeSection,
@@ -163,62 +155,3 @@ export function Header({
   );
 }
 
-export default function HomePage() {
-  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
-  const [activeSection, setActiveSection] = useState("code");
-
-  const renderSection = () => {
-    if (!selectedRepo) {
-      return (
-        <div className="flex items-center justify-center h-full text-gray-400">
-          <p>Select a repository to get started</p>
-        </div>
-      );
-    }
-
-    switch (activeSection) {
-      case "code":
-        return <CodeSection repository={selectedRepo} />;
-
-      case "issues":
-        return <IssuesSection repository={selectedRepo} />;
-
-      case "pullRequests":
-        return <PullRequestsSection repository={selectedRepo} />;
-
-      case "security":
-        return <SecuritySection repository={selectedRepo} />;
-
-      case "insights":
-        return <InsightsSection repository={selectedRepo} />;
-
-      case "agents":
-        return <AgentsSection repository={selectedRepo} />;
-
-      default:
-        return (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <p>Select a valid section</p>
-          </div>
-        );
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-screen bg-[#0d1117]">
-      <Header
-        activeSection={activeSection}
-        onSectionChange={setActiveSection}
-      />
-      <div className="flex gap-4 p-4 flex-1 overflow-hidden">
-        <div className="w-1/3 overflow-auto">
-          <RepositoryList
-            selectedRepo={selectedRepo}
-            onSelect={setSelectedRepo}
-          />
-        </div>
-        <div className="w-2/3 overflow-auto">{renderSection()}</div>
-      </div>
-    </div>
-  );
-}

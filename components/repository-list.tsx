@@ -56,9 +56,9 @@ export function RepositoryList() {
     // Clear any existing code indexer if it's for a different provider
     const chatService = ChatService.getInstance();
     const currentIndexer = chatService.getCodeIndexer();
-
+    
     if (currentIndexer && currentIndexer.provider !== repo.provider) {
-      chatService.clearCodeIndexer(); // Add this method to ChatService
+      chatService.clearCodeIndexer();
     }
 
     // Now set the selected repo
@@ -68,20 +68,21 @@ export function RepositoryList() {
   return (
     <Box
       sx={{
-        width: 300,
-        height: "100vh",
+        width: "100%",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
         bgcolor: "background.paper",
-        borderRight: 1,
-        borderColor: "divider",
-        position: "fixed",
-        left: 0,
-        top: 0,
-        pt: "64px", // Altura del header
       }}
     >
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+      <Box 
+        sx={{ 
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: "divider",
+          backgroundColor: "background.paper",
+        }}
+      >
         <TextField
           fullWidth
           size="small"
@@ -98,12 +99,20 @@ export function RepositoryList() {
           sx={{
             "& .MuiOutlinedInput-root": {
               bgcolor: "background.default",
+              borderRadius: 2,
+              transition: "all 0.2s",
+              "&:hover": {
+                boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.1)"
+              },
+              "&.Mui-focused": {
+                boxShadow: "0 0 0 2px rgba(58, 108, 217, 0.5)"
+              }
             },
           }}
         />
       </Box>
 
-      <Box sx={{ flex: 1, overflow: "auto" }}>
+      <Box sx={{ flex: 1, overflow: "auto", py: 1 }}>
         {filteredRepositories.map((repo) => (
           <ListItemButton
             key={`${repo.provider}-${repo.id}`}
@@ -173,8 +182,8 @@ export function RepositoryList() {
                       py: 0.5,
                       borderRadius: 1,
                       bgcolor: repo.private ? "warning.dark" : "success.dark",
-                      color: "text.primary", // Color más claro para mejor contraste
-                      fontWeight: 500, // Un poco más bold para mejor legibilidad
+                      color: "text.primary",
+                      fontWeight: 500,
                       flexShrink: 0,
                       whiteSpace: "nowrap",
                     }}

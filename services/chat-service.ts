@@ -31,7 +31,8 @@ export class ChatService {
   async initializeCodeIndexer(
     token: string,
     repoFullName: string,
-    provider = "github"
+    provider = "github",
+    progressCallback?: (progress: number) => void // Add this parameter
   ) {
     try {
       console.log(`Initializing ${provider} code indexer for ${repoFullName}`);
@@ -43,6 +44,11 @@ export class ChatService {
 
       if (!this.codeIndexer) {
         this.codeIndexer = new CodeIndexer(token);
+      }
+
+      // Set the progress callback if provided
+      if (progressCallback) {
+        this.codeIndexer.onProgress(progressCallback);
       }
 
       // Pass the provider to indexRepository
