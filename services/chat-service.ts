@@ -38,7 +38,7 @@ export class ChatService {
       console.log(`Initializing ${provider} code indexer for ${repoFullName}`);
 
       // Clear any previous indexer if provider changed
-      if (this.codeIndexer?.provider !== provider) {
+      if (this.codeIndexer?.getProvider() !== provider) {
         this.codeIndexer = null;
       }
 
@@ -67,7 +67,7 @@ export class ChatService {
 Repository description: ${
       context.repository.description || "No description provided"
     }
-Default branch: ${context.repository.defaultBranch || "main"}
+Default branch: ${context.repository.default_branch || "main"}
 `;
 
     if (this.codeIndexer?.codebase) {
@@ -101,7 +101,9 @@ Default branch: ${context.repository.defaultBranch || "main"}
         formattedContext += `\nCurrent file content:\n\`\`\`${
           context.currentFile.language || "text"
         }\n${this.truncateContent(
-          context.currentFile.content,
+          Array.isArray(context.currentFile.content) 
+            ? context.currentFile.content.join('\n')
+            : context.currentFile.content,
           30000
         )}\n\`\`\`\n`;
 

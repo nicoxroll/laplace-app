@@ -4,7 +4,7 @@ export class CodeIndexer {
   public codebase: Record<string, any> = {};
   private progressCallback?: (progress: number) => void;
   private accessToken: string;
-  private provider: string = "github"; // Default to GitHub
+  public provider: string = "github"; // Default to GitHub
   private lastReportedProgress: number = 0; // Track last reported progress
 
   constructor(token: string) {
@@ -91,7 +91,9 @@ export class CodeIndexer {
       });
 
       const tree = data.tree || [];
-      const codeFiles = tree.filter((item) => this.isCodeFile(item.path));
+      const codeFiles = tree.filter((item): item is { type: string; path: string } => 
+        typeof item.path === 'string' && this.isCodeFile(item.path)
+      );
       const totalFiles = codeFiles.length;
 
       if (totalFiles === 0) {

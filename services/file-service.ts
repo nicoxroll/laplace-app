@@ -132,12 +132,11 @@ export class FileService {
     return {
       name: file.name,
       path: file.path,
-      sha: file.sha,
       size: file.size,
       url: file.url,
       content: processedContent,
       encoding: file.encoding,
-      type: this.getFileType(file.path),
+      type: this.getFileType(file.path)
     };
   }
 }

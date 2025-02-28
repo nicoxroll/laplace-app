@@ -4,14 +4,14 @@ import {
   RepositoryContext,
   RepositoryFile,
   RepositoryProvider,
-} from "@/types/repository";
-import { Octokit } from "@octokit/rest";
-import { Session } from "next-auth";
-import {
+  FileType,
   GitHubRepository,
   GitLabRepository,
   Repository,
-} from "../types/repository";
+  TreeItem,
+} from "@/types/repository";
+import { Octokit } from "@octokit/rest";
+import { Session } from "next-auth";
 
 export class RepositoryService {
   private static instance: RepositoryService;
@@ -100,10 +100,28 @@ export class RepositoryService {
     token: string,
     path: string = ""
   ): Promise<RepositoryFile[]> {
-    // Implementación según el proveedor
-    return provider === "github"
-      ? this.fetchGitHubFiles(repoFullName, token, path)
-      : this.fetchGitLabFiles(repoFullName, token, path);
+    // Create a minimal repository object
+    const repository: Repository = {
+      id: "",
+      name: repoFullName.split("/")[1] || "",
+      full_name: repoFullName,
+      provider: provider,
+      default_branch: "main",
+      private: false
+    };
+    
+    const treeItems = provider === "github"
+      ? await this.fetchGitHubFileTree(repository, token)
+      : await this.fetchGitLabFileTree(repository, token);
+
+    // Convert TreeItems to RepositoryFiles
+    return treeItems
+      .filter(item => item.type === "file")
+      .map(item => ({
+        name: item.name,
+        path: item.path,
+        type: "file" as FileType,
+      }));
   }
 
   subscribe(listener: (context: RepositoryContext | null) => void): () => void {
@@ -126,7 +144,7 @@ export class RepositoryService {
     if (!this.context) return;
 
     const fileContent = await this.fetchFileContent(
-      this.context.provider,
+      this.context.repository,
       this.context.repository.full_name,
       path
     );
@@ -135,9 +153,9 @@ export class RepositoryService {
       ...this.context,
       currentPath: path,
       currentFile: {
-        name: path.split("/").pop() || "",
         path,
-        content: fileContent.split("\n"),
+        content: Array.isArray(fileContent) ? fileContent : [fileContent],
+        type: "file",
         language: path.split(".").pop(),
       },
     };
@@ -151,40 +169,17 @@ export class RepositoryService {
     }
 
     try {
-      // Verificar el provider de la sesión
-      const provider = session.user?.provider || session.provider;
-
-      // Fetch repos based on the provider
-      if (provider === "github") {
-        const githubRepos = await this.fetchGitHubRepositories(
-          session.user.accessToken
-        );
-        return githubRepos;
-      } else if (provider === "gitlab") {
-        const gitlabRepos = await this.fetchGitLabRepositories(
-          session.user.accessToken
-        );
-        return gitlabRepos;
+      switch (session.user.provider) {
+        case "github":
+          return await fetchGitHubRepositories(session.user.accessToken);
+        case "gitlab":
+          return await fetchGitLabRepositories(session.user.accessToken);
+        default:
+          throw new Error(`Unsupported provider: ${session.user.provider}`);
       }
-
-      // Si tenemos ambos tokens, intentar obtener de ambos providers
-      if (session.user.accessToken) {
-        const [githubRepos, gitlabRepos] = await Promise.all([
-          this.fetchGitHubRepositories(session.user.accessToken).catch(
-            () => []
-          ),
-          this.fetchGitLabRepositories(session.user.accessToken).catch(
-            () => []
-          ),
-        ]);
-
-        return [...githubRepos, ...gitlabRepos];
-      }
-
-      return [];
     } catch (error) {
       console.error("Error fetching repositories:", error);
-      return []; // Retornar array vacío en lugar de lanzar error
+      throw error;
     }
   }
 
@@ -212,14 +207,15 @@ export class RepositoryService {
           id: repo.id.toString(),
           name: repo.name,
           full_name: repo.full_name,
-          description: repo.description,
+          description: repo.description || undefined,
           private: repo.private,
           provider: "github",
+          html_url: repo.html_url,
+          default_branch: repo.default_branch,
           owner: {
             login: repo.owner.login,
             avatar_url: repo.owner.avatar_url,
           },
-          default_branch: repo.default_branch,
         })
       );
     } catch (error) {
@@ -295,13 +291,9 @@ export class RepositoryService {
           full_name: repo.path_with_namespace,
           provider: "gitlab",
           html_url: repo.web_url,
-          description: repo.description || "",
-          private: repo.visibility !== "public",
-          default_branch: repo.default_branch || "main",
-          owner: {
-            login: repo.namespace?.path || "",
-            avatar_url: repo.namespace?.avatar_url || "",
-          },
+          description: repo.description || undefined,
+          private: !repo.public,
+          default_branch: repo.default_branch,
           namespace: {
             name: repo.namespace?.name || "",
             avatar_url: repo.namespace?.avatar_url || "",
@@ -561,7 +553,7 @@ export class RepositoryService {
     }
   }
 
-  async fetchFileTree(repo: Repository, accessToken: string): Promise<any[]> {
+  async fetchFileTree(repo: Repository, accessToken: string): Promise<TreeItem[]> {
     if (!repo || !accessToken) return [];
 
     // Use different strategies based on provider
@@ -577,7 +569,7 @@ export class RepositoryService {
   private async fetchGitHubFileTree(
     repo: Repository,
     accessToken: string
-  ): Promise<any[]> {
+  ): Promise<TreeItem[]> {
     try {
       console.log("Fetching GitHub file tree using recursive strategy");
       const octokit = new Octokit({ auth: accessToken });
@@ -624,12 +616,9 @@ export class RepositoryService {
     }
   }
 
-  private processGitHubTree(tree: any[]): any[] {
-    // First, organize items by path
-    const fileMap = new Map();
-    const rootItems = [];
+  private processGitHubTree(tree: any[]): TreeItem[] {
+    const items: TreeItem[] = [];
 
-    // Sort items so directories come before files
     tree.sort((a, b) => {
       const aIsBlob = a.type === "blob";
       const bIsBlob = b.type === "blob";
@@ -638,47 +627,27 @@ export class RepositoryService {
       return a.path.localeCompare(b.path);
     });
 
-    // Process each tree item
     tree.forEach((item) => {
       const path = item.path;
       const parts = path.split("/");
       const name = parts[parts.length - 1];
 
-      // Create item object
-      const treeItem = {
-        name,
-        path,
+      const treeItem: TreeItem = {
+        name: String(name),
+        path: String(path),
         type: item.type === "blob" ? "file" : "dir",
-        sha: item.sha,
-        size: item.size,
-        children: item.type === "tree" ? [] : undefined,
       };
 
-      // Add to map for lookup
-      fileMap.set(path, treeItem);
-
-      // If this is a top-level item, add to rootItems
-      if (parts.length === 1) {
-        rootItems.push(treeItem);
-      } else {
-        // This is a nested item - find parent directory
-        const parentPath = parts.slice(0, -1).join("/");
-        const parentItem = fileMap.get(parentPath);
-
-        // Add to parent's children if parent exists
-        if (parentItem && parentItem.children) {
-          parentItem.children.push(treeItem);
-        }
-      }
+      items.push(treeItem);
     });
 
-    return rootItems;
+    return items;
   }
 
   private async fetchGitLabFileTree(
     repo: Repository,
     accessToken: string
-  ): Promise<any[]> {
+  ): Promise<TreeItem[]> {
     // Keep existing GitLab implementation
     try {
       console.log("Fetching GitLab file tree");
@@ -705,10 +674,8 @@ export class RepositoryService {
     }
   }
 
-  private processGitLabTree(items: any[]): any[] {
-    // Similar processing for GitLab items
-    const fileMap = new Map();
-    const rootItems = [];
+  private processGitLabTree(items: any[]): TreeItem[] {
+    const treeItems: TreeItem[] = [];
 
     items.sort((a, b) => {
       if (a.type === "tree" && b.type === "blob") return -1;
@@ -721,47 +688,34 @@ export class RepositoryService {
       const parts = path.split("/");
       const name = parts[parts.length - 1];
 
-      const treeItem = {
-        name,
-        path,
+      const treeItem: TreeItem = {
+        name: String(name),
+        path: String(path),
         type: item.type === "blob" ? "file" : "dir",
-        id: item.id,
-        children: item.type === "tree" ? [] : undefined,
       };
 
-      fileMap.set(path, treeItem);
-
-      if (parts.length === 1) {
-        rootItems.push(treeItem);
-      } else {
-        const parentPath = parts.slice(0, -1).join("/");
-        const parentItem = fileMap.get(parentPath);
-
-        if (parentItem && parentItem.children) {
-          parentItem.children.push(treeItem);
-        }
-      }
+      treeItems.push(treeItem);
     });
 
-    return rootItems;
+    return treeItems;
   }
 }
 
 export async function fetchRepositories(
   session: Session
 ): Promise<Repository[]> {
-  if (!session?.accessToken || !session?.provider) {
+  if (!session?.user?.accessToken) {
     throw new Error("No authentication token available");
   }
 
   try {
-    switch (session.provider) {
+    switch (session.user.provider) {
       case "github":
-        return await fetchGitHubRepositories(session.accessToken);
+        return await fetchGitHubRepositories(session.user.accessToken);
       case "gitlab":
-        return await fetchGitLabRepositories(session.accessToken);
+        return await fetchGitLabRepositories(session.user.accessToken);
       default:
-        throw new Error(`Unsupported provider: ${session.provider}`);
+        throw new Error(`Unsupported provider: ${session.user.provider}`);
     }
   } catch (error) {
     console.error("Error fetching repositories:", error);
@@ -790,15 +744,15 @@ async function fetchGitHubRepositories(
       id: repo.id.toString(),
       name: repo.name,
       full_name: repo.full_name,
-      provider: "github",
-      html_url: repo.html_url,
       description: repo.description || undefined,
       private: repo.private,
+      provider: "github",
+      html_url: repo.html_url,
       default_branch: repo.default_branch,
       owner: {
         login: repo.owner.login,
         avatar_url: repo.owner.avatar_url,
-      },
+      }
     })
   );
 }
@@ -834,7 +788,7 @@ async function fetchGitLabRepositories(
       namespace: {
         name: repo.namespace.name,
         avatar_url: repo.namespace.avatar_url,
-      },
+      }
     })
   );
 }
@@ -843,19 +797,19 @@ export async function getRepository(
   session: Session,
   repoFullName: string
 ): Promise<Repository | null> {
-  if (!session?.accessToken || !session?.provider) {
+  if (!session?.user?.accessToken || !session?.user?.provider) {
     throw new Error("No authentication token available");
   }
 
   try {
-    switch (session.provider) {
+    switch (session.user.provider) {
       case "github":
         const [owner, repo] = repoFullName.split("/");
         const githubResponse = await fetch(
           `https://api.github.com/repos/${owner}/${repo}`,
           {
             headers: {
-              Authorization: `Bearer ${session.accessToken}`,
+              Authorization: `Bearer ${session.user.accessToken}`,
               Accept: "application/vnd.github+json",
             },
           }
@@ -869,7 +823,6 @@ export async function getRepository(
           name: githubData.name,
           full_name: githubData.full_name,
           provider: "github",
-          html_url: githubData.html_url,
           description: githubData.description || undefined,
           private: githubData.private,
           default_branch: githubData.default_branch,
@@ -886,7 +839,7 @@ export async function getRepository(
           )}`,
           {
             headers: {
-              Authorization: `Bearer ${session.accessToken}`,
+              Authorization: `Bearer ${session.user.accessToken}`,
             },
           }
         );
@@ -899,7 +852,6 @@ export async function getRepository(
           name: gitlabData.name,
           full_name: gitlabData.path_with_namespace,
           provider: "gitlab",
-          html_url: gitlabData.web_url,
           description: gitlabData.description || undefined,
           private: !gitlabData.public,
           default_branch: gitlabData.default_branch,
