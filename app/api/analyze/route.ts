@@ -3,66 +3,98 @@ interface FileSize {
   size: string;
 }
 
+interface FileChunk {
+  files: Array<{ content?: string; path: string; language?: string }>;
+  totalFiles: number;
+  chunkIndex: number;
+}
+
+const MAX_CHUNK_SIZE = 4000; // tokens aproximados por chunk
+const CHUNK_OVERLAP = 500; // tokens de superposición entre chunks
+
+function splitFilesIntoChunks(files: Array<{ content?: string; path: string; language?: string }>): FileChunk[] {
+  let currentSize = 0;
+  let currentChunk: typeof files = [];
+  const chunks: FileChunk[] = [];
+  
+  for (const file of files) {
+    if (!file.content) continue;
+    
+    // Estimación aproximada de tokens (1 token ≈ 4 caracteres)
+    const fileTokens = Math.ceil(file.content.length / 4);
+    
+    if (currentSize + fileTokens > MAX_CHUNK_SIZE && currentChunk.length > 0) {
+      // Guardar chunk actual
+      chunks.push({
+        files: currentChunk,
+        totalFiles: files.length,
+        chunkIndex: chunks.length
+      });
+      // Iniciar nuevo chunk con superposición
+      currentChunk = [];
+      currentSize = 0;
+    }
+    
+    currentChunk.push(file);
+    currentSize += fileTokens;
+  }
+  
+  // Agregar el último chunk si existe
+  if (currentChunk.length > 0) {
+    chunks.push({
+      files: currentChunk,
+      totalFiles: files.length,
+      chunkIndex: chunks.length
+    });
+  }
+  
+  return chunks;
+}
+
 export async function POST(req: Request) {
   try {
-    // Extract from request
     const reqBody = await req.json();
-
-    // Log what we received to help with debugging
-    console.log("Analyze API received:", {
-      hasContext: !!reqBody.context,
-      hasRepoContext: !!reqBody.repoContext,
-      analysisType: reqBody.analysisType,
-      fileCount: (reqBody.context?.files || reqBody.repoContext?.files || [])
-        .length,
-    });
-
-    // Get the appropriate context object (either context or repoContext)
     const contextObj = reqBody.context || reqBody.repoContext;
 
     if (!contextObj || !contextObj.repository) {
-      console.error("Missing repository information in request");
       return Response.json(
         { error: "Invalid request: Missing repository information" },
         { status: 400 }
       );
     }
 
-    // Extract repository information
     const repository = contextObj.repository.full_name;
-    const provider = contextObj.provider || "github";
-
-    // Get all files from the context
     const files = contextObj.files || [];
     const currentFile = contextObj.currentFile;
 
-    // Add current file if it's not already included
-    if (
-      currentFile &&
-      currentFile.content &&
-      !files.some((f: { path: string }) => f.path === currentFile.path)
-    ) {
+    if (currentFile && currentFile.content && !files.some((f: { path: string }) => f.path === currentFile.path)) {
       files.push(currentFile);
     }
 
-    console.log(
-      `Analyzing repository: ${repository} with ${files.length} files`
-    );
+    // Dividir archivos en chunks procesables
+    const fileChunks = splitFilesIntoChunks(files);
+    const totalChunks = fileChunks.length;
 
-    // Prepare the file content for analysis - handle large files better
+    // Procesar el chunk actual
+    const chunkIndex = reqBody.chunkIndex || 0;
+    const currentChunk = fileChunks[chunkIndex];
+    
+    if (!currentChunk) {
+      return Response.json(
+        { error: "Invalid chunk index" },
+        { status: 400 }
+      );
+    }
+
     let contents = "";
-
-    // Track file sizes for logging
     let totalContentSize = 0;
     const sizesLog: FileSize[] = [];
 
-    // Process files with better organization
-    files.forEach(
+    // Procesar archivos del chunk actual
+    currentChunk.files.forEach(
       (file: { content?: string; path: string; language?: string }) => {
-        // Make sure file has content
         if (!file.content) return;
 
-        // Track file size
         const fileSize = file.content.length;
         totalContentSize += fileSize;
         sizesLog.push({
@@ -70,97 +102,70 @@ export async function POST(req: Request) {
           size: `${(fileSize / 1024).toFixed(1)}KB`,
         });
 
-        // Truncate very large files (over 100KB)
         let processedContent = file.content;
         if (fileSize > 100000) {
-          processedContent =
-            file.content.substring(0, 100000) +
-            `\n\n// ... content truncated (${(fileSize / 1024).toFixed(
-              1
-            )}KB total) ...\n`;
-          console.log(
-            `Truncated large file: ${file.path} (${(fileSize / 1024).toFixed(
-              1
-            )}KB)`
-          );
+          processedContent = file.content.substring(0, 100000) +
+            `\n\n// ... content truncated (${(fileSize / 1024).toFixed(1)}KB total) ...\n`;
         }
 
-        contents += `\nFile: ${file.path}\n\`\`\`${
-          file.language || "text"
-        }\n${processedContent}\n\`\`\`\n\n`;
+        contents += `\nFile: ${file.path}\n\`\`\`${file.language || "text"}\n${processedContent}\n\`\`\`\n\n`;
       }
     );
 
-    // Log file size information
-    console.log(
-      `Total content size: ${(totalContentSize / 1024 / 1024).toFixed(2)}MB`
-    );
-    console.log(`Processed ${files.length} files for analysis`);
+    // Construir el prompt según el índice del chunk
+    const isFirstChunk = chunkIndex === 0;
+    const isLastChunk = chunkIndex === totalChunks - 1;
 
-    if (files.length > 10) {
-      console.log(
-        "Largest files:",
-        sizesLog.sort((a, b) => parseInt(b.size) - parseInt(a.size)).slice(0, 5)
-      );
-    }
+    const systemPrompt = isFirstChunk 
+      ? `You are a security expert analyzing code repositories. This is part ${chunkIndex + 1} of ${totalChunks}.
+         For each issue found:
+         - Show the problematic code snippet
+         - Explain the security implications
+         - Provide a secure code example as solution
+         Use markdown formatting with proper syntax highlighting.`
+      : `Continue the security analysis. This is part ${chunkIndex + 1} of ${totalChunks}.
+         Focus on new issues found in these files while maintaining consistency with previous findings.`;
 
-    if (!contents.trim()) {
-      console.warn("No file contents provided for analysis");
-      contents = "No file contents available for analysis.";
-    }
+    const userPrompt = isFirstChunk
+      ? `Begin analyzing the security of ${repository} repository. This is part ${chunkIndex + 1} of ${totalChunks}:
 
-    // Continue with the API call
+# Security Analysis Report - Part ${chunkIndex + 1}/${totalChunks}
+
+## Security Issues Found
+For each issue:
+- Show the vulnerable code
+- Explain the security risk
+- Provide a secure solution
+
+Repository content to analyze (part ${chunkIndex + 1}):
+${contents}`
+      : `Continue the security analysis for ${repository}. This is part ${chunkIndex + 1} of ${totalChunks}.
+
+Analyze these additional files:
+${contents}
+
+Focus on finding new security issues while maintaining consistency with previous findings.`;
+
     const response = await fetch(
-      process.env.NEXT_PUBLIC_API_URL ||
-        "http://localhost:1234/v1/chat/completions",
+      process.env.NEXT_PUBLIC_API_URL || "http://192.168.1.41:1234/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
         },
+        signal: AbortSignal.timeout(160000), // Aumentar a 60 segundos
         body: JSON.stringify({
           messages: [
             {
               role: "system",
-              content: `You are a security expert analyzing code repositories.
-              For each issue or recommendation:
-              - Show the problematic code snippet
-              - Explain the security implications
-              - Provide a secure code example as solution
-              Use markdown formatting with proper syntax highlighting.`,
+              content: systemPrompt,
             },
             {
               role: "user",
-              content: `Analyze the security of ${repository} repository using this structure:
-
-# Security Analysis Report
-
-## 1. Security Vulnerabilities
-For each vulnerability found:
-- Show the vulnerable code snippet
-- Explain the security risk
-- Provide a secure code example
-
-## 2. Code Quality Issues
-For each quality issue:
-- Show the problematic code
-- Explain why it's a security concern
-- Provide an improved code example
-
-## 3. Best Practices
-For each recommendation:
-- Show current code that could be improved
-- Explain the best practice
-- Provide example implementation
-
-## 4. Security Improvements
-For each suggestion:
-- Show relevant code sections
-- Explain the improvement
-- Provide secure code examples
-
-Repository content to analyze:
-${contents}`,
+              content: userPrompt,
             },
           ],
           model: "deepseek-coder",
@@ -171,13 +176,42 @@ ${contents}`,
       }
     );
 
-    return new Response(response.body, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    // Transformar el stream para asegurar que es legible
+    const transformStream = new TransformStream();
+    const writer = transformStream.writable.getWriter();
+    const reader = response.body?.getReader();
+
+    if (!reader) {
+      return Response.json({ error: "No response stream available" }, { status: 500 });
+    }
+
+    // Procesar el stream en background
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+      } catch (error) {
+        console.error("Stream processing error:", error);
+      } finally {
+        await writer.close();
+        reader.releaseLock();
+      }
+    })();
+
+    // Agregar metadatos del chunk a la respuesta
+    const responseHeaders = {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Total-Chunks": totalChunks.toString(),
+      "X-Current-Chunk": chunkIndex.toString(),
+      "X-Has-More": (chunkIndex < totalChunks - 1).toString(),
+    };
+
+    return new Response(transformStream.readable, { headers: responseHeaders });
   } catch (error) {
     console.error("Analysis error:", error);
     return Response.json(

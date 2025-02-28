@@ -16,7 +16,7 @@ export function LoadingScreen() {
     // Show error message after 10 seconds
     const errorTimeout = setTimeout(() => {
       setShowErrorMessage(true);
-    }, 10000);
+    }, 109000);
 
     return () => {
       clearTimeout(delayTimeout);

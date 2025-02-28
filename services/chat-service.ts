@@ -334,7 +334,7 @@ Default branch: ${context.repository.default_branch || "main"}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-r1-distill-qwen-7b",
+          model: "deepseek-coder",
           messages: [
             {
               role: "system",

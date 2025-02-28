@@ -77,7 +77,7 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
         analysisType,
         accessToken,
         controller,
-        onUpdate
+        (content) => onUpdate(fullContent + content)
       );
     }
 
@@ -314,26 +314,23 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
       return;
     }
 
-    // Get repository context from repository service or code indexer
     const codeIndexer = chatService.getCodeIndexer();
-    if (!codeIndexer || !codeIndexer.codebase) {
-      console.error("Code indexer not initialized");
-      setError("Repository not properly indexed. Please try reindexing.");
+    if (!codeIndexer?.codebase) {
+      setError("No indexed files available");
       return;
     }
 
-    const indexedFilePaths = Object.keys(codeIndexer.codebase);
-    if (indexedFilePaths.length === 0) {
-      console.error("No files were indexed");
-      setError("No files were indexed. Please try reindexing.");
-      return;
-    }
+    // Convert indexed files to the expected format
+    const indexedFiles = Object.entries(codeIndexer.codebase).map(([path, content]) => ({
+      path,
+      content: content.toString(),
+      language: path.split('.').pop() || 'text'
+    }));
 
     setAnalyzing(true);
     setError(null);
     setReport({
-      content:
-        "# Security Analysis Report\n\n_Analyzing repository content..._",
+      content: "# Starting Security Analysis...\n\nAnalyzing repository files...",
       isStreaming: true,
       timestamp: Date.now(),
     });
@@ -342,62 +339,98 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
     abortControllerRef.current = controller;
 
     try {
-      // Create a simplified repository object
-      const simplifiedRepo = {
-        full_name: selectedRepo.full_name,
-        name: selectedRepo.full_name.split("/")[1] || "repo",
-        owner: selectedRepo.full_name.split("/")[0] || "owner",
-        default_branch: selectedRepo.default_branch || "main",
-        description: selectedRepo.description || "",
-      };
+      let currentChunk = 0;
+      let fullReport = "";
+      let hasMore = true;
 
-      // Convert indexed files to a consistent format
-      const indexedFiles = indexedFilePaths
-        .filter((path) => typeof codeIndexer.codebase[path] === "string")
-        .map((filePath) => ({
-          path: filePath,
-          content: codeIndexer.codebase[filePath],
-          language: filePath.split(".").pop() || "text",
-        }));
-
-      console.log(
-        `Found ${indexedFiles.length} valid indexed files to analyze`
-      );
-
-      // Create the repository context
-      const repoContext = {
-        provider: selectedRepo.provider || "github",
-        repository: simplifiedRepo,
-        currentPath: currentPath || "",
-        files: indexedFiles,
-        currentFile:
-          fileContent && fileContent.length > 0
-            ? {
-                path: currentPath || "",
-                content: fileContent,
-                language: (currentPath || "").split(".").pop() || "text",
-              }
-            : undefined,
-      };
-
-      // Process the repository in chunks
-      const fullContent = await processRepositoryInChunks(
-        repoContext,
-        "security",
-        session?.user?.accessToken || "",
-        controller,
-        (content) => {
-          setReport({
-            content,
-            isStreaming: true,
-            timestamp: Date.now(),
+      while (hasMore && !controller.signal.aborted) {
+        let response;
+        try {
+          response = await fetch("/api/analyze", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session?.user?.accessToken}`,
+              "Cache-Control": "no-cache",
+              "Connection": "keep-alive",
+            },
+            body: JSON.stringify({
+              context: {
+                repository: selectedRepo,
+                files: indexedFiles,
+                currentFile: currentPath ? { path: currentPath, content: fileContent } : undefined,
+              },
+              chunkIndex: currentChunk,
+            }),
+            signal: controller.signal,
           });
+        } catch (fetchError) {
+          console.error("Fetch error:", fetchError);
+          if (fetchError instanceof Error && fetchError.name === "AbortError") {
+            throw fetchError;
+          }
+          throw new Error("Failed to connect to analysis service. Please try again.");
         }
-      );
 
-      // Final report
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "Unknown error");
+          throw new Error(`Analysis request failed (${response.status}): ${errorText}`);
+        }
+
+        const totalChunks = parseInt(response.headers.get("X-Total-Chunks") || "1");
+        hasMore = response.headers.get("X-Has-More") === "true";
+        
+        const progress = Math.round(((currentChunk + 1) / totalChunks) * 100);
+        const progressReport = {
+          content: `${fullReport}\n\n# Analyzing Part ${currentChunk + 1}/${totalChunks} (${progress}% complete)...\n`,
+          isStreaming: true,
+          timestamp: Date.now(),
+        };
+        setReport(progressReport);
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("No response stream available");
+
+        const decoder = new TextDecoder();
+        let chunkContent = "";
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split("\n");
+
+            for (const line of lines) {
+              if (line.trim().startsWith("data: ")) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.choices?.[0]?.delta?.content) {
+                    chunkContent += data.choices[0].delta.content;
+                    const updatedReport = {
+                      content: `${fullReport}\n\n${chunkContent}`,
+                      isStreaming: true,
+                      timestamp: Date.now(),
+                    };
+                    setReport(updatedReport);
+                  }
+                } catch (e) {
+                  console.warn("Error parsing chunk:", e);
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        fullReport += (currentChunk === 0 ? "" : "\n\n") + chunkContent;
+        currentChunk++;
+      }
+
       setReport({
-        content: fullContent,
+        content: fullReport,
         isStreaming: false,
         timestamp: Date.now(),
       });
@@ -415,7 +448,18 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
       setAnalyzing(false);
       abortControllerRef.current = null;
     }
-  }, [selectedRepo, session, currentPath, fileContent, chatService]);
+  }, [
+    selectedRepo,
+    analyzing,
+    chatService,
+    session?.user?.accessToken,
+    currentPath,
+    fileContent,
+    setAnalyzing,
+    setError,
+    setReport,
+    abortControllerRef
+  ]);
 
   const stopAnalysis = useCallback(() => {
     if (abortControllerRef.current) {
