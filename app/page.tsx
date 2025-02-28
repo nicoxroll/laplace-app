@@ -42,7 +42,7 @@ export default function HomePage() {
   };
 
   const renderSection = () => {
-    if (!selectedRepo) {
+    if (!selectedRepo && activeSection !== "agents") {
       return (
         <Box
           sx={{
@@ -60,15 +60,15 @@ export default function HomePage() {
 
     switch (activeSection) {
       case "code":
-        return <CodeSection repository={selectedRepo} />;
+        return <CodeSection repository={selectedRepo!} />;
       case "issues":
-        return <IssuesSection repository={selectedRepo} />;
+        return <IssuesSection repository={selectedRepo!} />;
       case "pull-requests":
-        return <PullRequestsSection repository={selectedRepo} />;
+        return <PullRequestsSection repository={selectedRepo!} />;
       case "security":
-        return <SecuritySection repository={selectedRepo} />;
+        return <SecuritySection repository={selectedRepo!} />;
       case "insights":
-        return <InsightsSection repository={selectedRepo} />;
+        return <InsightsSection repository={selectedRepo!} />;
       case "agents":
         return <AgentsSection repository={selectedRepo} />;
       default:

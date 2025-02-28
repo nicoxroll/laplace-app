@@ -23,7 +23,8 @@ import {
   History,
   Loader2,
   Maximize2,
-  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Minimize2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -397,16 +398,34 @@ export function CodeViewer() {
     );
   };
 
+  // Eliminar las funciones anteriores de fullscreen y reemplazar por esta más simple
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        height: isFullscreen ? "100vh" : "100%",
         bgcolor: "background.default",
+        position: isFullscreen ? "fixed" : "relative",
+        top: isFullscreen ? 0 : "auto",
+        left: isFullscreen ? 0 : "auto",
+        right: isFullscreen ? 0 : "auto",
+        bottom: isFullscreen ? 0 : "auto",
+        zIndex: isFullscreen ? 1300 : "auto",
       }}
     >
-      <AppBar position="static" color="transparent" elevation={0}>
+      <AppBar 
+        position="static" 
+        color="transparent" 
+        elevation={0}
+        sx={{
+          bgcolor: isFullscreen ? "#161b22" : "transparent",
+        }}
+      >
         <Toolbar sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <IconButton
@@ -417,7 +436,11 @@ export function CodeViewer() {
                 "&:hover": { bgcolor: "#30363d" },
               }}
             >
-              <Menu size={16} /> {/* Reemplaza MenuIcon */}
+              {!isSidebarOpen ? (
+                <PanelLeftClose size={16} />
+              ) : (
+                <PanelLeftOpen size={16} />
+              )}
             </IconButton>
 
             <Box
@@ -551,14 +574,13 @@ export function CodeViewer() {
             {/* Action buttons */}
             <IconButton
               size="small"
-              onClick={() => setIsFullscreen(!isFullscreen)}
+              onClick={toggleFullscreen}
               sx={{
                 color: "text.secondary",
                 "&:hover": { bgcolor: "#30363d" },
               }}
             >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}{" "}
-              {/* Reemplaza Fullscreen y FullscreenExit */}
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </IconButton>
 
             <IconButton

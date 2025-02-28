@@ -2,9 +2,10 @@
 "use client";
 
 import { SectionCard } from "@/components/ui/section-card";
+import { DataTable } from "@/components/ui/data-table";
 import type { Repository } from "@/types/repository";
 import { Octokit } from "@octokit/rest";
-import { AlertCircle, Search } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -25,12 +26,72 @@ interface Issue {
   }>;
 }
 
+const columns = [
+  { 
+    id: 'number', 
+    label: 'Number', 
+    minWidth: 70,
+    format: (value: number) => `#${value}` 
+  },
+  { 
+    id: 'title', 
+    label: 'Title', 
+    minWidth: 200,
+    format: (value: string, row: Issue) => (
+      <a
+        href={row.html_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-400 hover:underline"
+      >
+        {value}
+      </a>
+    )
+  },
+  { 
+    id: 'user', 
+    label: 'Author', 
+    minWidth: 130,
+    format: (value: Issue['user']) => value && (
+      <div className="flex items-center gap-2">
+        <img
+          src={value.avatar_url}
+          alt={value.login}
+          className="w-6 h-6 rounded-full"
+        />
+        <span className="text-gray-300">{value.login}</span>
+      </div>
+    )
+  },
+  { 
+    id: 'state', 
+    label: 'Status', 
+    minWidth: 100,
+    format: (value: string) => (
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-medium ${
+          value === "open"
+            ? "bg-green-500/20 text-green-400"
+            : "bg-red-500/20 text-red-400"
+        }`}
+      >
+        {value}
+      </span>
+    )
+  },
+  { 
+    id: 'created_at', 
+    label: 'Date', 
+    minWidth: 100,
+    format: (value: string) => new Date(value).toLocaleDateString()
+  },
+];
+
 export function IssuesSection({ repository }: { repository: Repository }) {
   const { data: session } = useSession();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchIssues = useCallback(async () => {
     if (!session?.user?.accessToken || !repository) {
@@ -130,10 +191,6 @@ export function IssuesSection({ repository }: { repository: Repository }) {
     fetchIssues();
   }, [fetchIssues]);
 
-  const filteredIssues = issues.filter((issue) =>
-    issue.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   if (loading) {
     return (
       <SectionCard icon={AlertCircle} title="Cargando Issues...">
@@ -164,95 +221,14 @@ export function IssuesSection({ repository }: { repository: Repository }) {
   return (
     <SectionCard icon={AlertCircle} title={`Issues - ${repository.full_name}`}>
       <div className="space-y-4">
-        <div className="flex gap-4 mb-6">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Buscar Issues..."
-              className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-300"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
-          </div>
-        </div>
-
-        {filteredIssues.length === 0 ? (
+        {issues.length === 0 ? (
           <p className="text-gray-400">No se encontraron issues</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-[#30363d]">
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">
-                    Número
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">
-                    Título
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">
-                    Autor
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">
-                    Fecha
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIssues.map((issue) => (
-                  <tr
-                    key={issue.id}
-                    className="border-b border-[#30363d] hover:bg-[#0d1117]"
-                  >
-                    <td className="px-4 py-3 text-sm text-gray-300">
-                      #{issue.number}
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={issue.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:underline"
-                      >
-                        {issue.title}
-                      </a>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {issue.user && (
-                          <img
-                            src={issue.user.avatar_url}
-                            alt={issue.user.login}
-                            className="w-6 h-6 rounded-full"
-                          />
-                        )}
-                        <span className="text-gray-300">
-                          {issue.user && issue.user.login}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          issue.state === "open"
-                            ? "bg-green-500/20 text-green-400"
-                            : "bg-red-500/20 text-red-400"
-                        }`}
-                      >
-                        {issue.state}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">
-                      {new Date(issue.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable 
+            columns={columns} 
+            rows={issues}
+            rowsPerPageOptions={[10, 25, 50]}
+          />
         )}
       </div>
     </SectionCard>

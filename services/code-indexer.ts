@@ -164,6 +164,10 @@ export class CodeIndexer {
       // Reset progress tracking for new repository
       this.lastReportedProgress = 0;
 
+      if (!this.accessToken) {
+        throw new Error("GitLab access token is required");
+      }
+
       console.log(`Starting GitLab indexing for ${repoFullName}`);
 
       // First, get the repository ID if we have the full name
@@ -173,40 +177,48 @@ export class CodeIndexer {
       // Check if it's already a numeric ID
       if (/^\d+$/.test(repoFullName)) {
         projectId = repoFullName;
+        console.log(`Using provided numeric project ID: ${projectId}`);
       } else {
         // Fetch project ID from name
+        console.log(`Fetching project ID for: ${repoFullName}`);
         const projectResponse = await fetch(
           `https://gitlab.com/api/v4/projects/${encodedRepo}`,
           {
             headers: {
               Authorization: `Bearer ${this.accessToken}`,
+              "Content-Type": "application/json",
             },
           }
         );
 
         if (!projectResponse.ok) {
+          const errorBody = await projectResponse.text().catch(() => "No error body");
           throw new Error(
-            `Failed to get GitLab project: ${projectResponse.statusText}`
+            `Failed to get GitLab project (${projectResponse.status}): ${projectResponse.statusText}\nDetails: ${errorBody}`
           );
         }
 
         const projectData = await projectResponse.json();
         projectId = projectData.id.toString();
+        console.log(`Retrieved project ID: ${projectId}`);
       }
 
       // Get default branch
+      console.log(`Fetching repository info for project ${projectId}`);
       const repoInfoResponse = await fetch(
         `https://gitlab.com/api/v4/projects/${projectId}`,
         {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
+            "Content-Type": "application/json",
           },
         }
       );
 
       if (!repoInfoResponse.ok) {
+        const errorBody = await repoInfoResponse.text().catch(() => "No error body");
         throw new Error(
-          `Failed to get GitLab project info: ${repoInfoResponse.statusText}`
+          `Failed to get GitLab project info (${repoInfoResponse.status}): ${repoInfoResponse.statusText}\nDetails: ${errorBody}`
         );
       }
 
@@ -221,36 +233,63 @@ export class CodeIndexer {
 
       // Function to recursively fetch directory contents
       const fetchDirectory = async (path: string = ""): Promise<void> => {
-        const encodedPath = path ? encodeURIComponent(path) : "";
-        const url = `https://gitlab.com/api/v4/projects/${projectId}/repository/tree?path=${encodedPath}&ref=${defaultBranch}&per_page=100`;
+        try {
+          const encodedPath = path ? encodeURIComponent(path) : "";
+          const url = `https://gitlab.com/api/v4/projects/${projectId}/repository/tree?path=${encodedPath}&ref=${defaultBranch}&per_page=100`;
 
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        });
+          console.log(`Fetching GitLab directory: ${url}`);
 
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch GitLab directory ${path}: ${response.statusText}`
-          );
-        }
+          const response = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${this.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          });
 
-        const items = await response.json();
-
-        for (const item of items) {
-          const itemPath = path ? `${path}/${item.name}` : item.name;
-
-          if (item.type === "tree") {
-            // Recursively fetch subdirectories
-            await fetchDirectory(itemPath);
-          } else if (item.type === "blob") {
-            // Add file to our list
-            allFiles.push({
-              type: "blob",
-              path: itemPath,
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "No error body");
+            console.error(`GitLab API Error:`, {
+              status: response.status,
+              statusText: response.statusText,
+              url: url,
+              errorBody,
             });
+
+            // Si es un error 404, podría ser un archivo en lugar de un directorio
+            if (response.status === 404) {
+              console.log(`Path ${path} not found, might be a file or invalid path`);
+              return;
+            }
+
+            throw new Error(
+              `Failed to fetch GitLab directory (${response.status}): ${response.statusText}`
+            );
           }
+
+          const items = await response.json();
+
+          if (!Array.isArray(items)) {
+            console.warn(`Unexpected response format for path ${path}:`, items);
+            return;
+          }
+
+          for (const item of items) {
+            const itemPath = path ? `${path}/${item.name}` : item.name;
+
+            if (item.type === "tree") {
+              // Agregamos un pequeño delay entre llamadas recursivas para evitar rate limits
+              await new Promise(resolve => setTimeout(resolve, 100));
+              await fetchDirectory(itemPath);
+            } else if (item.type === "blob") {
+              allFiles.push({
+                type: "blob",
+                path: itemPath,
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching directory ${path}:`, error);
+          // No relanzamos el error para permitir que continúe con otros directorios
         }
       };
 
@@ -285,6 +324,7 @@ export class CodeIndexer {
               const response = await fetch(url, {
                 headers: {
                   Authorization: `Bearer ${this.accessToken}`,
+                  "Content-Type": "application/json",
                 },
               });
 
@@ -295,7 +335,7 @@ export class CodeIndexer {
                 );
               } else {
                 console.warn(
-                  `Error fetching GitLab file ${file.path}: ${response.statusText}`
+                  `Error fetching GitLab file ${file.path} (${response.status}): ${response.statusText}`
                 );
               }
             } catch (error) {
@@ -317,6 +357,7 @@ export class CodeIndexer {
       // Ensure we report 100% when done
       this.updateProgress(codeFiles.length, codeFiles.length);
 
+      console.log(`Finished indexing ${filesProcessed} files`);
       this.codebase = codebase;
       return codebase;
     } catch (error) {

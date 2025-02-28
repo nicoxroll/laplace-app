@@ -1,14 +1,13 @@
 "use client";
 
-import { Bot, Github, Gitlab } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { Bot } from "lucide-react";
+import { signOut } from "next-auth/react";
 import {
   Box,
   Button,
   Card,
   CardContent,
   Typography,
-  Divider,
   alpha,
 } from "@mui/material";
 import { keyframes } from "@mui/system";
@@ -25,7 +24,7 @@ const pulse = keyframes`
   }
 `;
 
-export default function SignIn() {
+export default function SignOut() {
   return (
     <Box
       sx={{
@@ -77,54 +76,22 @@ export default function SignIn() {
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Button
-              onClick={() => signIn("github", { callbackUrl: "/" })}
+              onClick={() => signOut({ callbackUrl: "/auth/signin" })}
               variant="contained"
               size="large"
-              startIcon={<Github />}
               fullWidth
               sx={{
-                bgcolor: "#238636",
+                bgcolor: "#24292e",
                 color: "white",
                 py: 1.5,
                 "&:hover": {
-                  bgcolor: "#2ea043",
-                },
-                "& .MuiButton-startIcon": {
-                  mr: 1.5,
+                  bgcolor: "#1c2126",
                 },
               }}
             >
-              Sign in with GitHub
-            </Button>
-
-            <Button
-              onClick={() => signIn("gitlab", { callbackUrl: "/" })}
-              variant="contained"
-              size="large"
-              startIcon={<Gitlab />}
-              fullWidth
-              sx={{
-                bgcolor: "#fc6d26",
-                color: "white",
-                py: 1.5,
-                "&:hover": {
-                  bgcolor: "#e24329",
-                },
-                "& .MuiButton-startIcon": {
-                  mr: 1.5,
-                },
-              }}
-            >
-              Sign in with GitLab
+              Sign out
             </Button>
           </Box>
-
-          <Divider 
-            sx={{ 
-              my: 3,
-              borderColor: alpha("#30363d", 0.5),
-            }} 
-          />
 
           <Typography
             variant="body2"
@@ -132,12 +99,13 @@ export default function SignIn() {
             sx={{
               color: "text.secondary",
               px: 2,
+              mt: 3,
             }}
           >
-            Choose your preferred Git provider to continue
+            Are you sure you want to sign out?
           </Typography>
         </CardContent>
       </Card>
     </Box>
   );
-}
+} 

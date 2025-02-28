@@ -19,7 +19,11 @@ import {
   Bot,
   CircleSlash,
   Code,
+  Eye,
+  EyeOff,
   GitPullRequest,
+  PanelLeftClose,
+  PanelLeftOpen,
   Shield,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
@@ -69,10 +73,36 @@ export function Header({
       }}
     >
       <Toolbar sx={{ gap: 2 }}>
-        <IconButton onClick={onToggleSidebar} sx={{ color: "text.secondary" }}>
-          <BookOpen className="h-6 w-6 text-blue-400" />
+        <IconButton 
+          onClick={onToggleSidebar} 
+          sx={{ 
+            color: "text.secondary",
+            "&:hover": {
+              "& svg": {
+                color: "#58a6ff"
+              }
+            }
+          }}
+        >
+          {showSidebar ? (
+            <Eye className="h-6 w-6 text-blue-400 transition-colors" />
+          ) : (
+            <EyeOff className="h-6 w-6 text-blue-400 transition-colors" />
+          )}
         </IconButton>
-        <Box sx={{ display: "flex", gap: 1 }}>
+        <Box 
+          sx={{ 
+            display: "flex", 
+            gap: 1,
+            overflowX: "auto",
+            msOverflowStyle: "none", // Para IE y Edge
+            scrollbarWidth: "none", // Para Firefox
+            "&::-webkit-scrollbar": { // Para Chrome, Safari y Opera
+              display: "none"
+            },
+            WebkitOverflowScrolling: "touch", // Para un scroll suave en iOS
+          }}
+        >
           {sections.map((section) => (
             <Button
               key={section.id}
@@ -83,6 +113,7 @@ export function Header({
                 textTransform: "none",
                 px: 2,
                 borderRadius: 1,
+                flexShrink: 0, // Evita que los botones se compriman
                 "&:hover": { bgcolor: "#30363d" },
                 ...(activeSection === section.id && {
                   bgcolor: "#1c2128",
@@ -139,7 +170,7 @@ export function Header({
               </Box>
               <Divider />
               <MenuItem
-                onClick={() => signOut()}
+                onClick={() => window.location.href = "/auth/signout"}
                 sx={{
                   color: "text.primary",
                   "&:hover": { bgcolor: "#30363d" },

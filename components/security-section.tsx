@@ -444,18 +444,30 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
         justifyContent="space-between"
         alignItems="center"
         mb={2}
+        sx={{
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 2, sm: 0 },
+        }}
       >
         <Typography variant="h6" color="textPrimary">
           <Shield className="mr-2 inline-block h-5 w-5" />
           AI Security Analysis {selectedRepo && `- ${selectedRepo.full_name}`}
         </Typography>
 
-        <Box display="flex" gap={2}>
+        <Box 
+          display="flex" 
+          gap={2}
+          sx={{
+            width: { xs: '100%', sm: 'auto' },
+            flexDirection: { xs: 'column', sm: 'row' },
+          }}
+        >
           <Button
             variant="outlined"
             color="primary"
             onClick={handleReindex}
             disabled={isIndexing}
+            fullWidth={true}
             startIcon={
               <RefreshCw
                 className={`h-4 w-4 ${isIndexing ? "animate-spin" : ""}`}
@@ -464,6 +476,7 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
             sx={{
               textTransform: "none",
               boxShadow: "none",
+              minWidth: { xs: '100%', sm: 'auto' },
               "&:hover": { boxShadow: "none" },
             }}
           >
@@ -475,6 +488,7 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
             color={analyzing ? "error" : "primary"}
             onClick={analyzing ? stopAnalysis : startAnalysis}
             disabled={!selectedRepo || !hasIndexedFiles || isIndexing}
+            fullWidth={true}
             startIcon={
               analyzing ? (
                 <X className="h-4 w-4" />
@@ -485,6 +499,7 @@ export function SecuritySection({ repository }: SecuritySectionProps) {
             sx={{
               textTransform: "none",
               boxShadow: "none",
+              minWidth: { xs: '100%', sm: 'auto' },
               "&:hover": {
                 boxShadow: "none",
               },

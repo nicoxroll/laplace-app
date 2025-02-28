@@ -15,6 +15,37 @@ import {
 import { Gitlab } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { styled } from '@mui/material/styles';
+import { Search } from 'lucide-react';
+
+const StyledTextField = styled(TextField)({
+  width: '100%',
+  '& .MuiInputBase-root': {
+    color: '#e6edf3',
+    backgroundColor: '#161b22',
+    height: '36px',
+    fontSize: '0.875rem',
+    borderRadius: 0,
+    border: 'none',
+    borderBottom: '1px solid #30363d',
+    '&:hover': {
+      backgroundColor: '#1c2129',
+    },
+    '&.Mui-focused': {
+      backgroundColor: '#1c2129',
+    },
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    border: 'none',
+  },
+  '& .MuiInputBase-input': {
+    padding: '8px 12px',
+  },
+  '& .MuiInputAdornment-root': {
+    color: '#8b949e',
+    marginLeft: '12px',
+  },
+});
 
 export function RepositoryList() {
   const { data: session } = useSession();
@@ -77,37 +108,23 @@ export function RepositoryList() {
     >
       <Box
         sx={{
-          p: 2,
           borderBottom: 1,
           borderColor: "divider",
           backgroundColor: "background.paper",
         }}
       >
-        <TextField
+        <StyledTextField
           fullWidth
           size="small"
-          placeholder="Search repositories..."
+          placeholder="Buscar repositorios..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ color: "text.secondary" }} />
+                <Search size={16} />
               </InputAdornment>
             ),
-          }}
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              bgcolor: "background.default",
-              borderRadius: 2,
-              transition: "all 0.2s",
-              "&:hover": {
-                boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.1)",
-              },
-              "&.Mui-focused": {
-                boxShadow: "0 0 0 2px rgba(58, 108, 217, 0.5)",
-              },
-            },
           }}
         />
       </Box>
