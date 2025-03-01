@@ -1,192 +1,179 @@
-import React, { useState } from 'react';
+"use client";
+
 import {
+  Box,
+  InputAdornment,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Paper,
   TablePagination,
+  TableRow,
   TableSortLabel,
   TextField,
-  InputAdornment,
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import { Search } from 'lucide-react';
-
-const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
-  backgroundColor: '#0d1117',
-  border: '1px solid #30363d',
-  borderRadius: '8px',
-  overflow: 'hidden',
-  '& .MuiTable-root': {
-    backgroundColor: 'transparent',
-  },
-  '& .MuiTableCell-root': {
-    borderColor: '#30363d',
-    color: '#e6edf3',
-  },
-  '& .MuiTableHead-root .MuiTableCell-root': {
-    backgroundColor: '#161b22',
-    fontWeight: 600,
-  },
-  '& .MuiTableRow-root:hover': {
-    backgroundColor: '#161b22',
-  },
-  '& .MuiTablePagination-root': {
-    color: '#e6edf3',
-    backgroundColor: '#161b22',
-  },
-  '& .MuiTablePagination-select': {
-    color: '#e6edf3',
-  },
-  '& .MuiTablePagination-selectIcon': {
-    color: '#e6edf3',
-  },
-  '& .MuiTablePagination-displayedRows': {
-    color: '#e6edf3',
-  },
-  '& .MuiTablePagination-actions': {
-    '& .MuiIconButton-root': {
-      color: '#e6edf3',
-      '&.Mui-disabled': {
-        color: '#30363d',
-      },
-    },
-  },
-  '& .MuiTablePagination-toolbar': {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '20px',
-  },
-  '& .MuiTableSortLabel-root': {
-    color: '#e6edf3',
-    '&:hover': {
-      color: '#58a6ff',
-    },
-    '&.Mui-active': {
-      color: '#58a6ff',
-    },
-  },
-  '& .MuiTableSortLabel-icon': {
-    color: '#58a6ff !important',
-  },
-}));
-
-const StyledTextField = styled(TextField)({
-  width: '100%',
-  '& .MuiInputBase-root': {
-    color: '#e6edf3',
-    backgroundColor: '#161b22',
-    height: '36px',
-    fontSize: '0.875rem',
-    borderRadius: 0,
-    border: 'none',
-    borderBottom: '1px solid #30363d',
-    '&:hover': {
-      backgroundColor: '#1c2129',
-    },
-    '&.Mui-focused': {
-      backgroundColor: '#1c2129',
-    },
-  },
-  '& .MuiOutlinedInput-notchedOutline': {
-    border: 'none',
-  },
-  '& .MuiInputBase-input': {
-    padding: '8px 12px',
-  },
-  '& .MuiInputAdornment-root': {
-    color: '#8b949e',
-    marginLeft: '12px',
-  },
-});
+  Typography,
+  alpha,
+} from "@mui/material";
+import { Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
 interface Column {
   id: string;
   label: string;
   minWidth?: number;
-  align?: 'right' | 'left' | 'center';
+  align?: "right" | "left" | "center";
   format?: (value: any, row?: any) => React.ReactNode;
+  sortable?: boolean;
 }
 
 interface DataTableProps {
   columns: Column[];
   rows: any[];
   rowsPerPageOptions?: number[];
+  title?: string;
 }
 
-function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
-  if (b[orderBy] < a[orderBy]) return -1;
-  if (b[orderBy] > a[orderBy]) return 1;
-  return 0;
-}
+type Order = "asc" | "desc";
 
-type Order = 'asc' | 'desc';
-
-function getComparator<Key extends keyof any>(
-  order: Order,
-  orderBy: Key,
-): (a: { [key in Key]: any }, b: { [key in Key]: any }) => number {
-  return order === 'desc'
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
-}
-
-export function DataTable({ columns, rows, rowsPerPageOptions = [5, 10, 25] }: DataTableProps) {
+export function DataTable({
+  columns,
+  rows,
+  rowsPerPageOptions = [10, 25, 100],
+  title,
+}: DataTableProps) {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [order, setOrder] = useState<Order>('desc');
-  const [orderBy, setOrderBy] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [orderBy, setOrderBy] = useState<string>("");
+  const [order, setOrder] = useState<Order>("asc");
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setRowsPerPage(+event.target.value);
     setPage(0);
   };
 
   const handleRequestSort = (property: string) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
+    const isAsc = orderBy === property && order === "asc";
+    setOrder(isAsc ? "desc" : "asc");
     setOrderBy(property);
   };
 
-  const filteredRows = rows.filter((row) =>
-    Object.values(row).some(
-      (value) =>
-        value &&
-        value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  // Filtrar filas según el término de búsqueda
+  const filteredRows = useMemo(() => {
+    if (!searchTerm) return rows;
 
-  const sortedRows = orderBy
-    ? filteredRows.sort(getComparator(order, orderBy))
-    : filteredRows;
+    return rows.filter((row) =>
+      Object.entries(row).some(([key, value]) => {
+        // Solo buscar en propiedades que son columnas
+        if (!columns.find((col) => col.id === key)) return false;
+
+        // Convertir el valor a string para búsqueda
+        const stringValue =
+          value !== null && value !== undefined ? String(value) : "";
+        return stringValue.toLowerCase().includes(searchTerm.toLowerCase());
+      })
+    );
+  }, [rows, searchTerm, columns]);
+
+  // Ordenar filas
+  const sortedRows = useMemo(() => {
+    if (!orderBy) return filteredRows;
+
+    return [...filteredRows].sort((a, b) => {
+      const aValue = a[orderBy];
+      const bValue = b[orderBy];
+
+      // Manejar valores nulos o indefinidos
+      if (aValue === undefined || aValue === null)
+        return order === "asc" ? -1 : 1;
+      if (bValue === undefined || bValue === null)
+        return order === "asc" ? 1 : -1;
+
+      // Comparar según el tipo
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return order === "asc" ? aValue - bValue : bValue - aValue;
+      }
+
+      // Comparar como strings
+      return order === "asc"
+        ? String(aValue).localeCompare(String(bValue))
+        : String(bValue).localeCompare(String(aValue));
+    });
+  }, [filteredRows, order, orderBy]);
+
+  // Paginar filas
+  const paginatedRows = useMemo(() => {
+    return sortedRows.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [sortedRows, page, rowsPerPage]);
 
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden', bgcolor: 'transparent', boxShadow: 'none' }}>
-      <StyledTextField
-        fullWidth
-        size="small"
-        placeholder="Buscar..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Search size={16} />
-            </InputAdornment>
-          ),
+    <Paper
+      sx={{
+        width: "100%",
+        overflow: "hidden",
+        backgroundColor: "#0d1117", // Fondo azul marino
+        border: "1px solid #30363d",
+        boxShadow: "none",
+      }}
+    >
+      <Box
+        sx={{
+          p: 2,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid #30363d",
         }}
-      />
-      <StyledTableContainer>
+      >
+        {title && (
+          <Typography variant="h6" sx={{ color: "#e6edf3" }}>
+            {title}
+          </Typography>
+        )}
+        <TextField
+          placeholder="Search..."
+          variant="outlined"
+          size="small"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={18} color="#8b949e" />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            ml: "auto",
+            width: { xs: "100%", sm: 250 },
+            mt: { xs: title ? 2 : 0, sm: 0 },
+            "& .MuiOutlinedInput-root": {
+              backgroundColor: "#161b22",
+              color: "#e6edf3",
+              borderColor: "#30363d",
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#58a6ff",
+              },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#58a6ff",
+              },
+            },
+          }}
+        />
+      </Box>
+
+      <TableContainer sx={{ maxHeight: 440 }}>
         <Table stickyHeader>
           <TableHead>
             <TableRow>
@@ -195,62 +182,137 @@ export function DataTable({ columns, rows, rowsPerPageOptions = [5, 10, 25] }: D
                   key={column.id}
                   align={column.align}
                   style={{ minWidth: column.minWidth }}
+                  sortDirection={orderBy === column.id ? order : false}
+                  sx={{
+                    backgroundColor: "#161b22", // Cabecera más oscura
+                    color: "#e6edf3",
+                    fontWeight: "bold",
+                    borderBottom: "1px solid #30363d",
+                  }}
                 >
-                  <TableSortLabel
-                    active={orderBy === column.id}
-                    direction={orderBy === column.id ? order : 'asc'}
-                    onClick={() => handleRequestSort(column.id)}
-                  >
-                    {column.label}
-                  </TableSortLabel>
+                  {column.sortable !== false ? (
+                    <TableSortLabel
+                      active={orderBy === column.id}
+                      direction={orderBy === column.id ? order : "asc"}
+                      onClick={() => handleRequestSort(column.id)}
+                      sx={{
+                        "&.MuiTableSortLabel-root": {
+                          color: "#8b949e",
+                          "&:hover": {
+                            color: "#58a6ff",
+                          },
+                          "&.Mui-active": {
+                            color: "#58a6ff",
+                          },
+                        },
+                        "& .MuiTableSortLabel-icon": {
+                          color: "#58a6ff !important",
+                        },
+                      }}
+                    >
+                      {column.label}
+                    </TableSortLabel>
+                  ) : (
+                    column.label
+                  )}
                 </TableCell>
               ))}
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedRows
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((row, index) => {
-                return (
-                  <TableRow hover role="checkbox" tabIndex={-1} key={index}>
-                    {columns.map((column) => {
-                      const value = row[column.id];
-                      return (
-                        <TableCell key={column.id} align={column.align}>
-                          {column.format ? column.format(value, row) : value}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })}
+            {paginatedRows.length > 0 ? (
+              paginatedRows.map((row, index) => (
+                <TableRow
+                  hover
+                  tabIndex={-1}
+                  key={index}
+                  sx={{
+                    "&:hover": {
+                      backgroundColor: "#1c2128",
+                    },
+                    "&:nth-of-type(odd)": {
+                      backgroundColor: alpha("#161b22", 0.5),
+                    },
+                  }}
+                >
+                  {columns.map((column) => {
+                    const value = row[column.id];
+                    return (
+                      <TableCell
+                        key={column.id}
+                        align={column.align}
+                        sx={{
+                          color: "#e6edf3",
+                          borderBottom: "1px solid #30363d",
+                        }}
+                      >
+                        {column.format ? column.format(value, row) : value}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  align="center"
+                  sx={{ py: 3, color: "#8b949e" }}
+                >
+                  No results found
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
-      </StyledTableContainer>
-      <TablePagination
-        rowsPerPageOptions={rowsPerPageOptions}
-        component="div"
-        count={sortedRows.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
+      </TableContainer>
+
+      <Box
         sx={{
-          borderTop: '1px solid #30363d',
-          backgroundColor: '#161b22',
-          '& .MuiToolbar-root': {
-            width: '100%',
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '20px',
-            padding: '0 16px',
-            minHeight: '52px',
-          },
-          '& .MuiTablePagination-spacer': {
-            display: 'none',
-          },
+          display: "flex",
+          justifyContent: "center",
+          p: 2,
+          borderTop: "1px solid #30363d",
         }}
-      />
+      >
+        <TablePagination
+          rowsPerPageOptions={rowsPerPageOptions}
+          component="div"
+          count={sortedRows.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Rows per page:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} of ${count}`
+          }
+          sx={{
+            color: "#8b949e",
+            "& .MuiTablePagination-select": {
+              color: "#e6edf3",
+              backgroundColor: "#161b22",
+              borderRadius: 1,
+              border: "1px solid #30363d",
+              "&:focus": {
+                borderColor: "#58a6ff",
+              },
+            },
+            "& .MuiTablePagination-selectIcon": {
+              color: "#8b949e",
+            },
+            "& .MuiIconButton-root": {
+              color: "#8b949e",
+              "&.Mui-disabled": {
+                color: "#484f58",
+              },
+              "&:hover": {
+                backgroundColor: "#1c2128",
+              },
+            },
+          }}
+        />
+      </Box>
     </Paper>
   );
-} 
+}

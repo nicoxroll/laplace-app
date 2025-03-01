@@ -1,188 +1,280 @@
 "use client";
 
+import { useRepository } from "@/contexts/repository-context";
 import {
   AppBar,
   Avatar,
   Box,
-  Button,
-  Divider,
+  Drawer,
   IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
+  Tab,
+  Tabs,
   Toolbar,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
-  BarChart2,
-  BookOpen,
   Bot,
-  CircleSlash,
   Code,
-  Eye,
-  EyeOff,
   GitPullRequest,
-  PanelLeftClose,
-  PanelLeftOpen,
+  LineChart,
+  LogOut,
+  Menu as MenuIcon,
+  MoreVertical,
+  Settings,
   Shield,
+  TicketCheck,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+interface HeaderProps {
+  activeSection: string;
+  onSectionChange: (section: string) => void;
+  showSidebar: boolean;
+  onToggleSidebar: () => void;
+}
 
 export function Header({
   activeSection,
   onSectionChange,
   showSidebar,
   onToggleSidebar,
-}: {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
-  showSidebar: boolean;
-  onToggleSidebar: () => void;
-}) {
+}: HeaderProps) {
   const { data: session } = useSession();
+  const { selectedRepo } = useRepository();
+  const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const open = Boolean(anchorEl);
 
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
+  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleClose = () => {
+  const handleCloseMenu = () => {
     setAnchorEl(null);
   };
 
+  const handleSettings = () => {
+    router.push("/settings");
+    handleCloseMenu();
+  };
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.push("/auth/signin");
+    handleCloseMenu();
+  };
+
+  const handleMobileMenuToggle = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const handleMobileNavigation = (sectionId: string) => {
+    onSectionChange(sectionId);
+    setMobileMenuOpen(false);
+  };
+
   const sections = [
-    { id: "code", icon: Code, label: "Code" },
-    { id: "pull-requests", icon: GitPullRequest, label: "Pull Requests" },
-    { id: "issues", icon: CircleSlash, label: "Issues" },
-    { id: "insights", icon: BarChart2, label: "Insights" },
-    { id: "security", icon: Shield, label: "Security" },
-    { id: "agents", icon: Bot, label: "Agents" },
+    { id: "code", label: "Code", icon: Code },
+    { id: "issues", label: "Issues", icon: TicketCheck },
+    { id: "pull-requests", label: "Pull Requests", icon: GitPullRequest },
+    { id: "security", label: "Security", icon: Shield },
+    { id: "insights", label: "Insights", icon: LineChart },
+    { id: "agents", label: "AI Agents", icon: Bot },
   ];
 
   return (
-    <AppBar
-      position="fixed"
-      color="transparent"
-      elevation={0}
-      sx={{
-        bgcolor: "background.paper",
-        borderBottom: 1,
-        borderColor: "divider",
-        zIndex: (theme) => theme.zIndex.drawer + 1,
-      }}
-    >
-      <Toolbar sx={{ gap: 2 }}>
-        <IconButton 
-          onClick={onToggleSidebar} 
-          sx={{ 
-            color: "text.secondary",
-            "&:hover": {
-              "& svg": {
-                color: "#58a6ff"
-              }
-            }
-          }}
-        >
-          {showSidebar ? (
-            <Eye className="h-6 w-6 text-blue-400 transition-colors" />
-          ) : (
-            <EyeOff className="h-6 w-6 text-blue-400 transition-colors" />
-          )}
-        </IconButton>
-        <Box 
-          sx={{ 
-            display: "flex", 
-            gap: 1,
-            overflowX: "auto",
-            msOverflowStyle: "none", // Para IE y Edge
-            scrollbarWidth: "none", // Para Firefox
-            "&::-webkit-scrollbar": { // Para Chrome, Safari y Opera
-              display: "none"
-            },
-            WebkitOverflowScrolling: "touch", // Para un scroll suave en iOS
-          }}
-        >
-          {sections.map((section) => (
-            <Button
-              key={section.id}
-              startIcon={<section.icon className="h-4 w-4" />}
-              onClick={() => onSectionChange(section.id)}
+    <>
+      <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
+        <Toolbar sx={{ backgroundColor: "background.paper" }}>
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label="menu"
+            onClick={onToggleSidebar}
+            sx={{ mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Typography
+              variant="h6"
+              component="div"
               sx={{
-                color: "text.primary",
-                textTransform: "none",
-                px: 2,
-                borderRadius: 1,
-                flexShrink: 0, // Evita que los botones se compriman
-                "&:hover": { bgcolor: "#30363d" },
-                ...(activeSection === section.id && {
-                  bgcolor: "#1c2128",
-                  "&:hover": { bgcolor: "#1c2128" },
-                }),
+                flexGrow: isMobile ? 1 : 0,
+                mr: isMobile ? 0 : 4,
               }}
             >
-              {section.label}
-            </Button>
-          ))}
-        </Box>
+              Laplace
+            </Typography>
+          </Box>
 
-        {session?.user && (
-          <Box sx={{ ml: "auto" }}>
-            <Tooltip title="Account settings">
-              <IconButton onClick={handleMenu} size="small">
-                <Avatar
-                  sx={{ width: 32, height: 32 }}
-                  src={session.user.image || undefined}
-                />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-              transformOrigin={{ horizontal: "right", vertical: "top" }}
-              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-              PaperProps={{
-                sx: {
-                  mt: 1,
-                  minWidth: 200,
-                  bgcolor: "background.paper",
-                  border: 1,
-                  borderColor: "divider",
+          {isMobile ? (
+            <IconButton
+              color="inherit"
+              onClick={handleMobileMenuToggle}
+              sx={{ mr: 1 }}
+            >
+              <MoreVertical />
+            </IconButton>
+          ) : (
+            <Tabs
+              value={activeSection}
+              onChange={(_, value) => onSectionChange(value)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{
+                flexGrow: 1,
+                "& .MuiTab-root": {
+                  minWidth: "auto",
+                  px: 2,
+                  py: 1.5,
+                  minHeight: 0,
+                  textTransform: "none",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
                 },
               }}
             >
-              <Box sx={{ px: 2, py: 1 }}>
-                <Typography
-                  variant="body2"
-                  sx={{ color: "text.primary" }}
-                  noWrap
+              {sections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <Tab
+                    key={section.id}
+                    value={section.id}
+                    label={
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Icon size={16} />
+                        <span>{section.label}</span>
+                      </Box>
+                    }
+                  />
+                );
+              })}
+            </Tabs>
+          )}
+
+          {session?.user && (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Tooltip title="Account settings">
+                <IconButton
+                  onClick={handleOpenMenu}
+                  size="small"
+                  sx={{ ml: 2 }}
+                  aria-controls={open ? "account-menu" : undefined}
+                  aria-haspopup="true"
+                  aria-expanded={open ? "true" : undefined}
                 >
-                  {session.user.name}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "text.secondary" }}
-                  noWrap
-                >
-                  {session.user.email}
-                </Typography>
-              </Box>
-              <Divider />
-              <MenuItem
-                onClick={() => window.location.href = "/auth/signout"}
-                sx={{
-                  color: "text.primary",
-                  "&:hover": { bgcolor: "#30363d" },
+                  <Avatar
+                    alt={session.user.name || "User"}
+                    src={session.user.image || undefined}
+                    sx={{ width: 32, height: 32 }}
+                  />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                anchorEl={anchorEl}
+                id="account-menu"
+                open={open}
+                onClose={handleCloseMenu}
+                onClick={handleCloseMenu}
+                PaperProps={{
+                  elevation: 0,
+                  sx: {
+                    overflow: "visible",
+                    filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
+                    mt: 1.5,
+                    "& .MuiAvatar-root": {
+                      width: 32,
+                      height: 32,
+                      ml: -0.5,
+                      mr: 1,
+                    },
+                    "&:before": {
+                      content: '""',
+                      display: "block",
+                      position: "absolute",
+                      top: 0,
+                      right: 14,
+                      width: 10,
+                      height: 10,
+                      bgcolor: "background.paper",
+                      transform: "translateY(-50%) rotate(45deg)",
+                      zIndex: 0,
+                    },
+                  },
                 }}
+                transformOrigin={{ horizontal: "right", vertical: "top" }}
+                anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
               >
-                Sign out
-              </MenuItem>
-            </Menu>
-          </Box>
-        )}
-      </Toolbar>
-    </AppBar>
+                <MenuItem onClick={handleCloseMenu}>
+                  <Avatar /> {session.user.name || session.user.email}
+                </MenuItem>
+                <MenuItem onClick={handleSettings}>
+                  <Settings size={16} style={{ marginRight: 8 }} />
+                  Settings
+                </MenuItem>
+                <MenuItem onClick={handleSignOut}>
+                  <LogOut size={16} style={{ marginRight: 8 }} />
+                  Sign out
+                </MenuItem>
+              </Menu>
+            </Box>
+          )}
+        </Toolbar>
+      </AppBar>
+
+      {/* Menú móvil */}
+      <Drawer
+        anchor="right"
+        open={mobileMenuOpen}
+        onClose={handleMobileMenuToggle}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 240,
+            backgroundColor: "background.paper",
+          },
+        }}
+      >
+        <Box sx={{ pt: 6, pb: 2 }}>
+          <List>
+            {sections.map((section) => {
+              const Icon = section.icon;
+              return (
+                <ListItem key={section.id} disablePadding>
+                  <ListItemButton
+                    selected={activeSection === section.id}
+                    onClick={() => handleMobileNavigation(section.id)}
+                  >
+                    <ListItemIcon>
+                      <Icon size={20} />
+                    </ListItemIcon>
+                    <ListItemText primary={section.label} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+        </Box>
+      </Drawer>
+    </>
   );
 }
-

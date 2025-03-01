@@ -101,8 +101,8 @@ Default branch: ${context.repository.default_branch || "main"}
         formattedContext += `\nCurrent file content:\n\`\`\`${
           context.currentFile.language || "text"
         }\n${this.truncateContent(
-          Array.isArray(context.currentFile.content) 
-            ? context.currentFile.content.join('\n')
+          Array.isArray(context.currentFile.content)
+            ? context.currentFile.content.join("\n")
             : context.currentFile.content,
           30000
         )}\n\`\`\`\n`;
@@ -334,7 +334,7 @@ Default branch: ${context.repository.default_branch || "main"}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-coder",
+          model: "deepseek-r1-distill-qwen-1.5b",
           messages: [
             {
               role: "system",

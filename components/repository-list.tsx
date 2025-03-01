@@ -4,7 +4,7 @@ import { useRepository } from "@/contexts/repository-context";
 import { ChatService } from "@/services/chat-service";
 import { RepositoryService } from "@/services/repository-service";
 import type { Repository } from "@/types/repository";
-import { GitHub, Search as SearchIcon } from "@mui/icons-material";
+import { GitHub } from "@mui/icons-material";
 import {
   Box,
   InputAdornment,
@@ -12,38 +12,37 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Gitlab } from "lucide-react";
+import { styled } from "@mui/material/styles";
+import { Gitlab, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { styled } from '@mui/material/styles';
-import { Search } from 'lucide-react';
 
 const StyledTextField = styled(TextField)({
-  width: '100%',
-  '& .MuiInputBase-root': {
-    color: '#e6edf3',
-    backgroundColor: '#161b22',
-    height: '36px',
-    fontSize: '0.875rem',
+  width: "100%",
+  "& .MuiInputBase-root": {
+    color: "#e6edf3",
+    backgroundColor: "#161b22",
+    height: "36px",
+    fontSize: "0.875rem",
     borderRadius: 0,
-    border: 'none',
-    borderBottom: '1px solid #30363d',
-    '&:hover': {
-      backgroundColor: '#1c2129',
+    border: "none",
+    borderBottom: "1px solid #30363d",
+    "&:hover": {
+      backgroundColor: "#1c2129",
     },
-    '&.Mui-focused': {
-      backgroundColor: '#1c2129',
+    "&.Mui-focused": {
+      backgroundColor: "#1c2129",
     },
   },
-  '& .MuiOutlinedInput-notchedOutline': {
-    border: 'none',
+  "& .MuiOutlinedInput-notchedOutline": {
+    border: "none",
   },
-  '& .MuiInputBase-input': {
-    padding: '8px 12px',
+  "& .MuiInputBase-input": {
+    padding: "8px 12px",
   },
-  '& .MuiInputAdornment-root': {
-    color: '#8b949e',
-    marginLeft: '12px',
+  "& .MuiInputAdornment-root": {
+    color: "#8b949e",
+    marginLeft: "12px",
   },
 });
 
@@ -116,7 +115,7 @@ export function RepositoryList() {
         <StyledTextField
           fullWidth
           size="small"
-          placeholder="Buscar repositorios..."
+          placeholder="Search Repositories"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{

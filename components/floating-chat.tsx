@@ -7,7 +7,7 @@ import { ChatService } from "@/services/chat-service";
 import { CodeIndexer } from "@/services/code-indexer";
 import { FileType } from "@/types/repository";
 import { Box, Fab, LinearProgress, Paper, useTheme } from "@mui/material"; // Add useTheme here
-import { Bot, Maximize2, Minimize2, X } from "lucide-react";
+import { Cat, Maximize2, Minimize2, X } from "lucide-react";
 import { useSession } from "next-auth/react"; // Add this import
 import { Resizable } from "re-resizable";
 import { useEffect, useRef, useState } from "react";
@@ -114,6 +114,7 @@ export function FloatingChat() {
                   content: fileContent,
                   language: currentPath.split(".").pop() || "text",
                   type: "file" as FileType,
+                  name: currentPath.split("/").pop() || "",
                 }
               : undefined,
         }),
@@ -191,7 +192,7 @@ export function FloatingChat() {
           zIndex: 9999, // Aumentado para estar sobre todo
         }}
       >
-        <Bot />
+        <Cat size={24} color="#ffffff" />
       </Fab>
 
       {state.isOpen && (

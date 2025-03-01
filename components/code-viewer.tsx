@@ -23,9 +23,9 @@ import {
   History,
   Loader2,
   Maximize2,
+  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
-  Minimize2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -418,16 +418,27 @@ export function CodeViewer() {
         zIndex: isFullscreen ? 1300 : "auto",
       }}
     >
-      <AppBar 
-        position="static" 
-        color="transparent" 
+      <AppBar
+        position="static"
+        color="transparent"
         elevation={0}
         sx={{
           bgcolor: isFullscreen ? "#161b22" : "transparent",
         }}
       >
         <Toolbar sx={{ borderBottom: 1, borderColor: "divider" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              p: 1,
+              borderBottom: 1,
+              borderColor: "divider",
+              overflowX: "auto",
+              whiteSpace: "nowrap",
+              gap: 1,
+            }}
+          >
             <IconButton
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               size="small"
@@ -437,9 +448,9 @@ export function CodeViewer() {
               }}
             >
               {!isSidebarOpen ? (
-                <PanelLeftClose size={16} />
+                <PanelLeftClose size={18} />
               ) : (
-                <PanelLeftOpen size={16} />
+                <PanelLeftOpen size={18} />
               )}
             </IconButton>
 
@@ -580,7 +591,7 @@ export function CodeViewer() {
                 "&:hover": { bgcolor: "#30363d" },
               }}
             >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </IconButton>
 
             <IconButton

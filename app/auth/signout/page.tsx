@@ -1,16 +1,9 @@
 "use client";
 
-import { Bot } from "lucide-react";
-import { signOut } from "next-auth/react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Typography,
-  alpha,
-} from "@mui/material";
+import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 import { keyframes } from "@mui/system";
+import { Cat } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 const pulse = keyframes`
   0% {
@@ -43,7 +36,8 @@ export default function SignOut() {
           bgcolor: "#161b22",
           border: "1px solid",
           borderColor: "#30363d",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.36)",
+          boxShadow:
+            "0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.36)",
         }}
       >
         <CardContent sx={{ p: 4 }}>
@@ -60,7 +54,7 @@ export default function SignOut() {
               },
             }}
           >
-            <Bot className="bot-icon h-12 w-12 text-blue-400 mr-3" />
+            <Cat className="bot-icon h-12 w-12 text-blue-400 mr-3" />
             <Typography
               variant="h4"
               component="h1"
@@ -108,4 +102,4 @@ export default function SignOut() {
       </Card>
     </Box>
   );
-} 
+}

@@ -1,18 +1,37 @@
 "use client";
 
-import { MessageCircle } from 'lucide-react';
+import { Box, Fab, Tooltip } from "@mui/material";
+import { Cat } from "lucide-react";
 
 interface ChatToggleButtonProps {
-  action: string;
+  onClick: () => void;
+  isOpen: boolean;
 }
 
-export function ChatToggleButton({ action }: ChatToggleButtonProps) {
+export function ChatToggleButton({ onClick, isOpen }: ChatToggleButtonProps) {
   return (
-    <button
-      data-action={action}
-      className="fixed bottom-4 right-4 p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all duration-300 z-50"
+    <Box
+      sx={{
+        position: "fixed",
+        bottom: 16,
+        right: 16,
+        zIndex: 1000,
+      }}
     >
-      <MessageCircle className="h-6 w-6 text-white" />
-    </button>
+      <Tooltip title={isOpen ? "Close AI Chat" : "Open AI Chat"}>
+        <Fab
+          color="primary"
+          onClick={onClick}
+          sx={{
+            backgroundColor: "#0d1117",
+            "&:hover": {
+              backgroundColor: "#161b22",
+            },
+          }}
+        >
+          <Cat size={24} />
+        </Fab>
+      </Tooltip>
+    </Box>
   );
 }

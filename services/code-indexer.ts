@@ -91,8 +91,9 @@ export class CodeIndexer {
       });
 
       const tree = data.tree || [];
-      const codeFiles = tree.filter((item): item is { type: string; path: string } => 
-        typeof item.path === 'string' && this.isCodeFile(item.path)
+      const codeFiles = tree.filter(
+        (item): item is { type: string; path: string } =>
+          typeof item.path === "string" && this.isCodeFile(item.path)
       );
       const totalFiles = codeFiles.length;
 
@@ -192,7 +193,9 @@ export class CodeIndexer {
         );
 
         if (!projectResponse.ok) {
-          const errorBody = await projectResponse.text().catch(() => "No error body");
+          const errorBody = await projectResponse
+            .text()
+            .catch(() => "No error body");
           throw new Error(
             `Failed to get GitLab project (${projectResponse.status}): ${projectResponse.statusText}\nDetails: ${errorBody}`
           );
@@ -216,7 +219,9 @@ export class CodeIndexer {
       );
 
       if (!repoInfoResponse.ok) {
-        const errorBody = await repoInfoResponse.text().catch(() => "No error body");
+        const errorBody = await repoInfoResponse
+          .text()
+          .catch(() => "No error body");
         throw new Error(
           `Failed to get GitLab project info (${repoInfoResponse.status}): ${repoInfoResponse.statusText}\nDetails: ${errorBody}`
         );
@@ -247,7 +252,9 @@ export class CodeIndexer {
           });
 
           if (!response.ok) {
-            const errorBody = await response.text().catch(() => "No error body");
+            const errorBody = await response
+              .text()
+              .catch(() => "No error body");
             console.error(`GitLab API Error:`, {
               status: response.status,
               statusText: response.statusText,
@@ -257,7 +264,9 @@ export class CodeIndexer {
 
             // Si es un error 404, podría ser un archivo en lugar de un directorio
             if (response.status === 404) {
-              console.log(`Path ${path} not found, might be a file or invalid path`);
+              console.log(
+                `Path ${path} not found, might be a file or invalid path`
+              );
               return;
             }
 
@@ -278,7 +287,7 @@ export class CodeIndexer {
 
             if (item.type === "tree") {
               // Agregamos un pequeño delay entre llamadas recursivas para evitar rate limits
-              await new Promise(resolve => setTimeout(resolve, 100));
+              await new Promise((resolve) => setTimeout(resolve, 100));
               await fetchDirectory(itemPath);
             } else if (item.type === "blob") {
               allFiles.push({
@@ -300,7 +309,9 @@ export class CodeIndexer {
       const codeFiles = allFiles.filter((item) => this.isCodeFile(item.path));
 
       if (codeFiles.length === 0) {
-        throw new Error("No indexable files found in GitLab repository");
+        console.warn("No indexable files found in GitLab repository");
+        this.codebase = {};
+        return {};
       }
 
       console.log(
@@ -372,34 +383,26 @@ export class CodeIndexer {
     const excludedExtensions = [
       "jpg",
       "jpeg",
-      "wav",
-      "mp3",
-      "mp4",
-      "avi",
-      "mov",
-      "pdf",
-      "css",
-      "scss",
-      "map",
-      "svg",
       "png",
       "gif",
       "bmp",
       "ico",
+      "svg",
+      "wav",
+      "mp3",
+      "css",
+      "scss",
+      "flac",
+      "mp4",
+      "avi",
+      "mov",
+      "flv",
+      "mkv",
       "pdf",
       "zip",
       "tar",
       "gz",
       "rar",
-      "mp3",
-      "mp4",
-      "avi",
-      "mkv",
-      "min.js",
-      "slim.js",
-      "min.css",
-      "mov",
-      "flv",
       "exe",
       "dll",
       "so",
@@ -411,14 +414,7 @@ export class CodeIndexer {
     ];
 
     // These paths should be excluded
-    const excludedPaths = [
-      "node_modules/",
-      "dist/",
-      "build/",
-      ".git/",
-      "vendor/",
-      "coverage/",
-    ];
+    const excludedPaths = ["node_modules/", "dist/", "build/", ".git/"];
 
     // Check if path contains any excluded directory
     if (excludedPaths.some((excluded) => path.includes(excluded))) {
@@ -432,37 +428,7 @@ export class CodeIndexer {
       return false;
     }
 
-    // Always include security-relevant files
-    const securityRelevantPatterns = [
-      "auth",
-      "security",
-      "login",
-      "password",
-      "token",
-      "jwt",
-      "oauth",
-      "permission",
-      "role",
-      "encrypt",
-      "decrypt",
-      "hash",
-      "config",
-      "env",
-      "docker",
-      "k8s",
-      "kube",
-      "deployment",
-    ];
-
-    const lowerPath = path.toLowerCase();
-    const isSecurityRelevant = securityRelevantPatterns.some((pattern) =>
-      lowerPath.includes(pattern)
-    );
-
-    if (isSecurityRelevant) {
-      return true;
-    }
-
+    // Incluir todos los demás archivos
     return true;
   }
 

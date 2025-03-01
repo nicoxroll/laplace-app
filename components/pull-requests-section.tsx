@@ -1,10 +1,11 @@
 // components/pull-requests-section.tsx
 "use client";
 
-import { SectionCard } from "@/components/ui/section-card";
 import { DataTable } from "@/components/ui/data-table";
+import { SectionCard } from "@/components/ui/section-card";
+import { Typography } from "@/components/ui/typography";
 import type { Repository } from "@/types/repository";
-import { AlertCircle, GitPullRequest, Search } from "lucide-react";
+import { AlertCircle, GitPullRequest } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
@@ -28,15 +29,15 @@ interface PullRequest {
 }
 
 const columns = [
-  { 
-    id: 'number', 
-    label: 'Number', 
+  {
+    id: "number",
+    label: "Number",
     minWidth: 70,
-    format: (value: number) => `#${value}` 
+    format: (value: number) => `#${value}`,
   },
-  { 
-    id: 'title', 
-    label: 'Title', 
+  {
+    id: "title",
+    label: "Title",
     minWidth: 200,
     format: (value: string, row: PullRequest) => (
       <a
@@ -47,13 +48,13 @@ const columns = [
       >
         {value}
       </a>
-    )
+    ),
   },
-  { 
-    id: 'user', 
-    label: 'Author', 
+  {
+    id: "user",
+    label: "Author",
     minWidth: 130,
-    format: (value: PullRequest['user']) => (
+    format: (value: PullRequest["user"]) => (
       <div className="flex items-center gap-2">
         <img
           src={value.avatar_url}
@@ -62,11 +63,11 @@ const columns = [
         />
         <span className="text-gray-300">{value.login}</span>
       </div>
-    )
+    ),
   },
-  { 
-    id: 'state', 
-    label: 'Status', 
+  {
+    id: "state",
+    label: "Status",
     minWidth: 100,
     format: (value: string) => (
       <span
@@ -80,13 +81,13 @@ const columns = [
       >
         {value}
       </span>
-    )
+    ),
   },
-  { 
-    id: 'created_at', 
-    label: 'Date', 
+  {
+    id: "created_at",
+    label: "Date",
     minWidth: 100,
-    format: (value: string) => new Date(value).toLocaleDateString()
+    format: (value: string) => new Date(value).toLocaleDateString(),
   },
 ];
 
@@ -168,7 +169,7 @@ export function PullRequestsSection({
 
   if (loading) {
     return (
-      <SectionCard icon={GitPullRequest} title="Cargando Pull Requests...">
+      <SectionCard icon={GitPullRequest} title="Loading Pull Requests...">
         <div className="space-y-4">
           <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
             <div className="flex flex-col gap-2">
@@ -185,7 +186,7 @@ export function PullRequestsSection({
     return (
       <SectionCard
         icon={AlertCircle}
-        title="Error al cargar PRs"
+        title="Error loading PRs"
         className="border-red-500/20"
       >
         <p className="text-red-300 font-mono text-sm">{error}</p>
@@ -200,10 +201,12 @@ export function PullRequestsSection({
     >
       <div className="space-y-4">
         {pullRequests.length === 0 ? (
-          <p className="text-gray-400">No se encontraron pull requests</p>
+          <Typography variant="body2" color="text.secondary">
+            No pull requests found
+          </Typography>
         ) : (
-          <DataTable 
-            columns={columns} 
+          <DataTable
+            columns={columns}
             rows={pullRequests}
             rowsPerPageOptions={[10, 25, 50]}
           />

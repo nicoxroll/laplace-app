@@ -1,11 +1,12 @@
 "use client";
 
+import { Box, Typography } from "@mui/material";
 import { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface SectionCardProps {
-  icon?: LucideIcon;
-  title?: string;
+  icon: LucideIcon;
+  title: string;
   children: ReactNode;
   className?: string;
   fullHeight?: boolean;
@@ -19,22 +20,38 @@ export function SectionCard({
   fullHeight = false,
 }: SectionCardProps) {
   return (
-    <div className="py-4">
-      <div
-        className={`max-w-6xl mx-auto bg-[#161b22] rounded-lg border border-[#30363d] shadow-xl ${
-          fullHeight ? "h-[calc(100vh-8rem)]" : ""
-        } ${className}`}
+    <Box
+      sx={{
+        p: 2,
+        backgroundColor: "background.paper",
+        borderRadius: 1,
+        border: 1,
+        borderColor: "divider",
+        marginTop: 2,
+        height: fullHeight ? "calc(100vh - 8rem)" : "auto",
+      }}
+    >
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+        sx={{
+          flexDirection: { xs: "column", sm: "row" },
+          gap: { xs: 2, sm: 0 },
+        }}
       >
-        {(Icon || title) && (
-          <div className="p-6 border-b border-[#30363d]">
-            <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-200">
-              {Icon && <Icon className="h-6 w-6 text-blue-400" />}
-              {title}
-            </h2>
-          </div>
-        )}
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
+        <Typography
+          variant="h6"
+          color="textPrimary"
+          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+        >
+          {Icon && <Icon size={20} />}
+          {title}
+        </Typography>
+      </Box>
+
+      <Box>{children}</Box>
+    </Box>
   );
 }

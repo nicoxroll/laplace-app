@@ -128,39 +128,39 @@ export async function POST(req: Request) {
       ? `You are a security expert analyzing code repositories. This is part ${
           chunkIndex + 1
         } of ${totalChunks}.
-         For each issue found:
-         - Show the problematic code snippet
-         - Explain the security implications
-         - Provide a secure code example as solution
-         Use markdown formatting with proper syntax highlighting.`
+           For each issue found:
+           - Show the problematic code snippet
+           - Explain the security implications
+           - Provide a secure code example as solution
+           Use markdown formatting with proper syntax highlighting.`
       : `Continue the security analysis. This is part ${
           chunkIndex + 1
         } of ${totalChunks}.
-         Focus on new issues found in these files while maintaining consistency with previous findings.`;
+           Focus on new issues found in these files while maintaining consistency with previous findings.`;
 
     const userPrompt = isFirstChunk
       ? `Begin analyzing the security of ${repository} repository. This is part ${
           chunkIndex + 1
         } of ${totalChunks}:
-
-# Security Analysis Report - Part ${chunkIndex + 1}/${totalChunks}
-
-## Security Issues Found
-For each issue:
-- Show the vulnerable code
-- Explain the security risk
-- Provide a secure solution
-
-Repository content to analyze (part ${chunkIndex + 1}):
-${contents}`
+  
+  # Security Analysis Report - Part ${chunkIndex + 1}/${totalChunks}
+  
+  ## Security Issues Found
+  For each issue:
+  - Show the vulnerable code
+  - Explain the security risk
+  - Provide a secure solution
+  
+  Repository content to analyze (part ${chunkIndex + 1}):
+  ${contents}`
       : `Continue the security analysis for ${repository}. This is part ${
           chunkIndex + 1
         } of ${totalChunks}.
-
-Analyze these additional files:
-${contents}
-
-Focus on finding new security issues while maintaining consistency with previous findings.`;
+  
+  Analyze these additional files:
+  ${contents}
+  
+  Focus on finding new security issues while maintaining consistency with previous findings.`;
 
     const response = await fetch(
       process.env.NEXT_PUBLIC_API_URL ||
@@ -185,7 +185,7 @@ Focus on finding new security issues while maintaining consistency with previous
               content: userPrompt,
             },
           ],
-          model: "deepseek-r1-distill-qwen-7b",
+          model: "deepseek-r1-distill-qwen-1.5b",
           stream: true,
           temperature: 0.7,
           max_tokens: 4000,

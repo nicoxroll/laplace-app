@@ -2,6 +2,7 @@
 
 import { SectionCard } from "@/components/ui/section-card";
 import { Repository } from "@/types/repository";
+import { Box, Grid, Paper, Typography } from "@mui/material";
 import {
   AlertCircle,
   GitBranch,
@@ -144,40 +145,113 @@ export function InsightsSection({ repository }: InsightsSectionProps) {
 
   if (loading) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-blue-400">
-          <LineChart className="h-6 w-6" />
+      <Box
+        sx={{
+          maxWidth: "4xl",
+          p: 6,
+          bgcolor: "background.paper",
+          borderRadius: 1,
+          boxShadow: 4,
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{
+            mb: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            color: "primary.main",
+          }}
+        >
+          <LineChart />
           Loading Insights...
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        </Typography>
+        <Grid container spacing={2}>
           {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d] animate-pulse"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-5 w-5 rounded bg-gray-700" />
-                <div className="h-4 bg-gray-700 rounded w-20" />
-              </div>
-              <div className="h-8 bg-gray-700 rounded w-16 mt-2" />
-            </div>
+            <Grid item xs={12} md={6} lg={4} key={i}>
+              <Paper
+                sx={{
+                  p: 2,
+                  bgcolor: "background.default",
+                  borderRadius: 1,
+                  border: 1,
+                  borderColor: "divider",
+                  animation: "pulse 1.5s infinite ease-in-out",
+                }}
+              >
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+                >
+                  <Box
+                    sx={{
+                      height: 20,
+                      width: 20,
+                      borderRadius: "50%",
+                      bgcolor: "grey.700",
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      height: 16,
+                      bgcolor: "grey.700",
+                      borderRadius: 0.5,
+                      width: 80,
+                    }}
+                  />
+                </Box>
+                <Box
+                  sx={{
+                    height: 32,
+                    bgcolor: "grey.700",
+                    borderRadius: 0.5,
+                    width: 64,
+                    mt: 1,
+                  }}
+                />
+              </Paper>
+            </Grid>
           ))}
-        </div>
-      </div>
+        </Grid>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl p-6 bg-[#161b22] rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-red-400">
-          <AlertCircle className="h-6 w-6" />
-          Error al cargar Insights
-        </h2>
-        <div className="space-y-4">
-          <p className="text-red-300 font-mono text-sm">{error}</p>
-        </div>
-      </div>
+      <Box
+        sx={{
+          maxWidth: "4xl",
+          p: 6,
+          bgcolor: "background.paper",
+          borderRadius: 1,
+          boxShadow: 4,
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{
+            mb: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            color: "error.main",
+          }}
+        >
+          <AlertCircle />
+          Error loading Insights
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "error.light",
+            fontFamily: "monospace",
+            fontSize: "0.875rem",
+          }}
+        >
+          {error}
+        </Typography>
+      </Box>
     );
   }
 
@@ -186,57 +260,117 @@ export function InsightsSection({ repository }: InsightsSectionProps) {
       icon={LineChart}
       title={`Repository Insights - ${repository.full_name}`}
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-yellow-400" />
-            <span className="text-gray-300">Stars</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-200 mt-2">
-            {insights?.stars.toLocaleString()}
-          </p>
-        </div>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6} lg={4}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: "background.default",
+              borderRadius: 1,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Star sx={{ color: "warning.main" }} />
+              <Typography variant="body2" color="text.secondary">
+                Stars
+              </Typography>
+            </Box>
+            <Typography variant="h4" sx={{ mt: 1, fontWeight: "bold" }}>
+              {insights?.stars.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
 
-        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <GitBranch className="h-5 w-5 text-purple-400" />
-            <span className="text-gray-300">Branches</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-200 mt-2">
-            {insights?.branches.toLocaleString()}
-          </p>
-        </div>
+        <Grid item xs={12} md={6} lg={4}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: "background.default",
+              borderRadius: 1,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <GitBranch sx={{ color: "secondary.main" }} />
+              <Typography variant="body2" color="text.secondary">
+                Branches
+              </Typography>
+            </Box>
+            <Typography variant="h4" sx={{ mt: 1, fontWeight: "bold" }}>
+              {insights?.branches.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
 
-        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <GitCommit className="h-5 w-5 text-green-400" />
-            <span className="text-gray-300">Commits</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-200 mt-2">
-            {insights?.commits.toLocaleString()}
-          </p>
-        </div>
+        <Grid item xs={12} md={6} lg={4}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: "background.default",
+              borderRadius: 1,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <GitCommit sx={{ color: "success.main" }} />
+              <Typography variant="body2" color="text.secondary">
+                Commits
+              </Typography>
+            </Box>
+            <Typography variant="h4" sx={{ mt: 1, fontWeight: "bold" }}>
+              {insights?.commits.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
 
-        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-400" />
-            <span className="text-gray-300">Contributors</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-200 mt-2">
-            {insights?.contributors.toLocaleString()}
-          </p>
-        </div>
+        <Grid item xs={12} md={6} lg={4}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: "background.default",
+              borderRadius: 1,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Users sx={{ color: "info.main" }} />
+              <Typography variant="body2" color="text.secondary">
+                Contributors
+              </Typography>
+            </Box>
+            <Typography variant="h4" sx={{ mt: 1, fontWeight: "bold" }}>
+              {insights?.contributors.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
 
-        <div className="p-4 bg-[#0d1117] rounded-lg border border-[#30363d]">
-          <div className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-orange-400" />
-            <span className="text-gray-300">Forks</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-200 mt-2">
-            {insights?.forks.toLocaleString()}
-          </p>
-        </div>
-      </div>
+        <Grid item xs={12} md={6} lg={4}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: "background.default",
+              borderRadius: 1,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Star sx={{ color: "warning.main" }} />
+              <Typography variant="body2" color="text.secondary">
+                Forks
+              </Typography>
+            </Box>
+            <Typography variant="h4" sx={{ mt: 1, fontWeight: "bold" }}>
+              {insights?.forks.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
     </SectionCard>
   );
 }

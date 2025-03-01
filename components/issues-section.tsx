@@ -1,11 +1,12 @@
 // components/issues-section.tsx
 "use client";
 
-import { SectionCard } from "@/components/ui/section-card";
 import { DataTable } from "@/components/ui/data-table";
+import { SectionCard } from "@/components/ui/section-card";
+import { Typography } from "@/components/ui/typography";
 import type { Repository } from "@/types/repository";
 import { Octokit } from "@octokit/rest";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, TicketCheck } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -27,15 +28,15 @@ interface Issue {
 }
 
 const columns = [
-  { 
-    id: 'number', 
-    label: 'Number', 
+  {
+    id: "number",
+    label: "Number",
     minWidth: 70,
-    format: (value: number) => `#${value}` 
+    format: (value: number) => `#${value}`,
   },
-  { 
-    id: 'title', 
-    label: 'Title', 
+  {
+    id: "title",
+    label: "Title",
     minWidth: 200,
     format: (value: string, row: Issue) => (
       <a
@@ -46,26 +47,27 @@ const columns = [
       >
         {value}
       </a>
-    )
+    ),
   },
-  { 
-    id: 'user', 
-    label: 'Author', 
+  {
+    id: "user",
+    label: "Author",
     minWidth: 130,
-    format: (value: Issue['user']) => value && (
-      <div className="flex items-center gap-2">
-        <img
-          src={value.avatar_url}
-          alt={value.login}
-          className="w-6 h-6 rounded-full"
-        />
-        <span className="text-gray-300">{value.login}</span>
-      </div>
-    )
+    format: (value: Issue["user"]) =>
+      value && (
+        <div className="flex items-center gap-2">
+          <img
+            src={value.avatar_url}
+            alt={value.login}
+            className="w-6 h-6 rounded-full"
+          />
+          <span className="text-gray-300">{value.login}</span>
+        </div>
+      ),
   },
-  { 
-    id: 'state', 
-    label: 'Status', 
+  {
+    id: "state",
+    label: "Status",
     minWidth: 100,
     format: (value: string) => (
       <span
@@ -77,13 +79,13 @@ const columns = [
       >
         {value}
       </span>
-    )
+    ),
   },
-  { 
-    id: 'created_at', 
-    label: 'Date', 
+  {
+    id: "created_at",
+    label: "Date",
     minWidth: 100,
-    format: (value: string) => new Date(value).toLocaleDateString()
+    format: (value: string) => new Date(value).toLocaleDateString(),
   },
 ];
 
@@ -193,7 +195,7 @@ export function IssuesSection({ repository }: { repository: Repository }) {
 
   if (loading) {
     return (
-      <SectionCard icon={AlertCircle} title="Cargando Issues...">
+      <SectionCard icon={TicketCheck} title="Loading Issues...">
         <div className="space-y-4">
           <div className="p-4 bg-[#0d1117] rounded-lg animate-pulse">
             <div className="flex flex-col gap-2">
@@ -210,7 +212,7 @@ export function IssuesSection({ repository }: { repository: Repository }) {
     return (
       <SectionCard
         icon={AlertCircle}
-        title="Error al cargar Issues"
+        title="Error loading issues"
         className="border-red-500/20"
       >
         <p className="text-red-300 font-mono text-sm">{error}</p>
@@ -222,10 +224,12 @@ export function IssuesSection({ repository }: { repository: Repository }) {
     <SectionCard icon={AlertCircle} title={`Issues - ${repository.full_name}`}>
       <div className="space-y-4">
         {issues.length === 0 ? (
-          <p className="text-gray-400">No se encontraron issues</p>
+          <Typography variant="body2" color="text.secondary">
+            No issues found
+          </Typography>
         ) : (
-          <DataTable 
-            columns={columns} 
+          <DataTable
+            columns={columns}
             rows={issues}
             rowsPerPageOptions={[10, 25, 50]}
           />

@@ -1,41 +1,38 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Github, Gitlab } from "lucide-react";
-import { signIn, signOut, useSession } from "next-auth/react";
+import { Button } from "@mui/material";
+import { Cat } from "lucide-react";
+import { signIn } from "next-auth/react";
 
-export function LoginButton() {
-  const { data: session } = useSession();
+interface LoginButtonProps {
+  provider: string;
+  label: string;
+}
 
-  if (session) {
-    return (
-      <Button
-        onClick={() => signOut()}
-        variant="ghost"
-        className="text-gray-300 hover:bg-[#30363d]"
-      >
-        Sign out
-      </Button>
-    );
-  }
+export function LoginButton({ provider, label }: LoginButtonProps) {
+  const handleLogin = () => {
+    signIn(provider, { callbackUrl: "/" });
+  };
 
   return (
-    <div className="flex gap-4">
-      <button
-        onClick={() => signIn("github")}
-        className="flex items-center gap-2 px-4 py-2 bg-[#24292e] hover:bg-[#1c2126] text-white rounded-lg transition-colors"
-      >
-        <Github className="h-5 w-5" />
-        Sign in with GitHub
-      </button>
-      
-      <button
-        onClick={() => signIn("gitlab")}
-        className="flex items-center gap-2 px-4 py-2 bg-[#fc6d26] hover:bg-[#e24329] text-white rounded-lg transition-colors"
-      >
-        <Gitlab className="h-5 w-5" />
-        Sign in with GitLab
-      </button>
-    </div>
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={handleLogin}
+      startIcon={<Cat size={20} />}
+      sx={{
+        py: 1.5,
+        px: 3,
+        borderRadius: 2,
+        textTransform: "none",
+        fontWeight: 500,
+        backgroundColor: "#0d1117",
+        "&:hover": {
+          backgroundColor: "#161b22",
+        },
+      }}
+    >
+      {label}
+    </Button>
   );
 }

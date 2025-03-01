@@ -1,17 +1,17 @@
 "use client";
 
-import { Bot, Github, Gitlab } from "lucide-react";
-import { signIn } from "next-auth/react";
 import {
   Box,
   Button,
   Card,
   CardContent,
-  Typography,
   Divider,
+  Typography,
   alpha,
 } from "@mui/material";
 import { keyframes } from "@mui/system";
+import { Cat, Github, Gitlab } from "lucide-react";
+import { signIn } from "next-auth/react";
 
 const pulse = keyframes`
   0% {
@@ -44,7 +44,8 @@ export default function SignIn() {
           bgcolor: "#161b22",
           border: "1px solid",
           borderColor: "#30363d",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.36)",
+          boxShadow:
+            "0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.36)",
         }}
       >
         <CardContent sx={{ p: 4 }}>
@@ -61,7 +62,7 @@ export default function SignIn() {
               },
             }}
           >
-            <Bot className="bot-icon h-12 w-12 text-blue-400 mr-3" />
+            <Cat className="bot-icon h-12 w-12 text-blue-400 mr-3" />
             <Typography
               variant="h4"
               component="h1"
@@ -119,11 +120,11 @@ export default function SignIn() {
             </Button>
           </Box>
 
-          <Divider 
-            sx={{ 
+          <Divider
+            sx={{
               my: 3,
               borderColor: alpha("#30363d", 0.5),
-            }} 
+            }}
           />
 
           <Typography
