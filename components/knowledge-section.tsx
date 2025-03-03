@@ -1,17 +1,25 @@
 "use client";
+
 import { DataTable } from "@/components/ui/data-table";
 import { SectionCard } from "@/components/ui/section-card";
-import { BookOpen, AlertCircle } from "lucide-react";
-import { Typography, Chip, Box, CircularProgress, Alert } from "@mui/material";
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { KnowledgeItem } from "@/types/sections";
 import { KnowledgeService } from "@/services/knowledge-service";
-import { error } from "console";
-import { size } from "lodash";
-import { icon } from "mermaid/dist/rendering-util/rendering-elements/shapes/icon.js";
-import { title } from "process";
-import zIndex from "@mui/material/styles/zIndex";
+import { KnowledgeItem } from "@/types/sections";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { AlertCircle, BookOpen, Plus } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 // Define column type
 interface Column {
@@ -99,74 +107,266 @@ export function KnowledgeSection() {
   const [error, setError] = useState<string | null>(null);
   const knowledgeService = KnowledgeService.getInstance();
 
-  useEffect(() => {
-    async function fetchKnowledgeData() {
-      if (!session?.user?.accessToken) {
-        setLoading(false);
-        setKnowledgeData([]);
-        return;
-      }
+  // Estado para el modal de crear conocimiento
+  const [modalOpen, setModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newKnowledge, setNewKnowledge] = useState({
+    name: "",
+    description: "",
+    content: "",
+  });
 
-      try {
-        setLoading(true);
-        setError(null);
+  // Añadir estos estados
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
-        // Datos de prueba temporales mientras se soluciona el problema del API
-        const demoData: KnowledgeItem[] = [
-          {
-            id: "1",
-            name: "Reglas",
-            description: "Documentos de normas",
-            size: "540KB",
-            type: "pdf",
-            created_at: "2025-01-15",
-            updated_at: "2025-02-20",
-            user_id: "dev-user-1",
-          },
-          {
-            id: "2",
-            name: "Guía de arquitectura",
-            description: "Principios de diseño y estándares",
-            size: "1.2MB",
-            type: "docx",
-            created_at: "2025-01-10",
-            updated_at: "2025-02-18",
-            user_id: "dev-user-1",
-          },
-          {
-            id: "3",
-            name: "Manual de operaciones",
-            description: "Procedimientos operativos estándar",
-            size: "750KB",
-            type: "md",
-            created_at: "2025-02-05",
-            updated_at: "2025-02-22",
-            user_id: "dev-user-1",
-          },
-        ];
+  // Función para manejar los cambios en los campos del formulario
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setNewKnowledge((prev) => ({ ...prev, [name]: value }));
+  };
 
-        setKnowledgeData(demoData);
-
-        // Código comentado para intentar obtener los datos reales
-        /* 
-        const profile = await knowledgeService.getUserProfile(...);
-        ... resto del código original ...
-        */
-      } catch (err) {
-        // Manejo de error como antes
-        console.error("Error fetching knowledge data:", err);
-        setError(err instanceof Error ? err.message : "Error desconocido");
-        setKnowledgeData([]); // Asegurar que siempre tenemos un array vacío al menos
-      } finally {
-        setLoading(false);
-      }
+  // Función para crear nuevo conocimiento
+  const handleCreateKnowledge = async () => {
+    if (!session?.user?.accessToken) {
+      setError("No hay sesión activa");
+      return;
     }
 
+    try {
+      setCreating(true);
+      setError(null);
+      setErrorDetails(null);
+
+      const provider = session.user.provider || "github";
+      const jwtToken = await knowledgeService.exchangeToken(
+        session.user.accessToken,
+        provider
+      );
+
+      // Usar el método del servicio que ahora tiene el formato correcto
+      await knowledgeService.createKnowledgeItem(
+        `Bearer ${jwtToken}`,
+        newKnowledge.name,
+        newKnowledge.description,
+        newKnowledge.content
+      );
+
+      // Si llegamos aquí, fue exitoso
+      setModalOpen(false);
+      setNewKnowledge({ name: "", description: "", content: "" });
+      fetchKnowledgeData();
+    } catch (error) {
+      console.error("Error completo:", error);
+      setError(
+        error instanceof Error ? error.message : "Error al crear conocimiento"
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Añadir función para depurar el modelo
+  const debugKnowledgeModel = async () => {
+    if (!session?.user?.accessToken) {
+      setError("No hay sesión activa");
+      return;
+    }
+
+    try {
+      const provider = session.user.provider || "github";
+      const jwtToken = await knowledgeService.exchangeToken(
+        session.user.accessToken,
+        provider
+      );
+
+      const modelInfo = await knowledgeService.getKnowledgeModelInfo(
+        `Bearer ${jwtToken}`
+      );
+      setDebugInfo(modelInfo);
+      console.log("Información del modelo Knowledge:", modelInfo);
+
+      // Mostrar información en el modal
+      setErrorDetails(JSON.stringify(modelInfo, null, 2));
+    } catch (err) {
+      console.error("Error obteniendo información del modelo:", err);
+      setError(err instanceof Error ? err.message : "Error en depuración");
+    }
+  };
+
+  // Función existente para obtener datos modificada para ser reutilizable
+  async function fetchKnowledgeData() {
+    if (!session?.user?.accessToken) {
+      setLoading(false);
+      setKnowledgeData([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Resto del código existente...
+      const oauthToken = session.user.accessToken;
+      const provider = session.user.provider || "github";
+      const jwtToken = await knowledgeService.exchangeToken(
+        oauthToken,
+        provider
+      );
+      const profile = await knowledgeService.getUserProfile(
+        `Bearer ${jwtToken}`
+      );
+      const userId = profile.id || "1";
+      const data = await knowledgeService.getUserKnowledge(
+        `Bearer ${jwtToken}`,
+        userId
+      );
+      setKnowledgeData(data);
+    } catch (err) {
+      console.error("Error fetching knowledge data:", err);
+      setError(err instanceof Error ? err.message : "Error desconocido");
+      const fallbackData = knowledgeService.getFallbackKnowledgeData("1");
+      setKnowledgeData(fallbackData);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // useEffect existente...
+  useEffect(() => {
     fetchKnowledgeData();
+  }, [session]);
+
+  useEffect(() => {
+    // Verificar que el token está presente
+    console.log("¿Hay token?", !!session?.user?.accessToken);
+    console.log("Token:", session?.user?.accessToken?.substring(0, 15) + "...");
+
+    // Probar con Fetch directamente
+    if (session?.user?.accessToken) {
+      const token = session.user.accessToken;
+      fetch("http://localhost:8000/users/profile", {
+        headers: {
+          Authorization: token.startsWith("Bearer ")
+            ? token
+            : `Bearer ${token}`,
+        },
+      })
+        .then((res) => {
+          console.log("Status de profile:", res.status);
+          if (!res.ok) return res.text();
+          return res.json();
+        })
+        .then((data) => console.log("Datos:", data))
+        .catch((err) => console.error("Error fetch:", err));
+    }
   }, [session]);
 
   return (
     <SectionCard icon={BookOpen} title="Knowledge Base">
+      {/* Botón para añadir nuevo conocimiento */}
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<Plus size={18} />}
+          onClick={() => setModalOpen(true)}
+        >
+          Agregar conocimiento
+        </Button>
+      </Box>
+
+      {/* Modal para crear nuevo conocimiento */}
+      <Dialog
+        open={modalOpen}
+        onClose={() => !creating && setModalOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Crear nuevo conocimiento</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            name="name"
+            label="Nombre"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newKnowledge.name}
+            onChange={handleInputChange}
+            disabled={creating}
+            sx={{ mb: 2, mt: 1 }}
+          />
+          <TextField
+            margin="dense"
+            name="description"
+            label="Descripción"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newKnowledge.description}
+            onChange={handleInputChange}
+            disabled={creating}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            name="content"
+            label="Contenido"
+            multiline
+            rows={4}
+            fullWidth
+            variant="outlined"
+            value={newKnowledge.content}
+            onChange={handleInputChange}
+            disabled={creating}
+          />
+
+          {/* Sección de información de depuración */}
+          {errorDetails && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Detalles del error:</Typography>
+              <Box
+                sx={{
+                  maxHeight: "200px",
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "monospace",
+                  fontSize: "0.8rem",
+                  backgroundColor: "#f5f5f5",
+                  p: 1,
+                  borderRadius: 1,
+                }}
+              >
+                {errorDetails}
+              </Box>
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setModalOpen(false)} disabled={creating}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={debugKnowledgeModel}
+            color="info"
+            disabled={creating}
+          >
+            Debug
+          </Button>
+          <Button
+            onClick={handleCreateKnowledge}
+            variant="contained"
+            disabled={creating || !newKnowledge.name}
+            startIcon={creating ? <CircularProgress size={20} /> : null}
+          >
+            {creating ? "Creando..." : "Crear"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Si hay error, mostrar alerta pero mantener la tabla */}
       {error && (
         <Alert
