@@ -15,6 +15,7 @@ import { Box } from "@mui/material";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { KnowledgeSection } from "@/components/knowledge-section";
 
 export default function HomePage() {
   const { selectedRepo } = useRepository();
@@ -42,7 +43,11 @@ export default function HomePage() {
   };
 
   const renderSection = () => {
-    if (!selectedRepo && activeSection !== "agents") {
+    if (
+      !selectedRepo &&
+      activeSection !== "agents" &&
+      activeSection !== "knowledge"
+    ) {
       return (
         <Box
           sx={{
@@ -71,6 +76,8 @@ export default function HomePage() {
         return <InsightsSection repository={selectedRepo!} />;
       case "agents":
         return <AgentsSection repository={selectedRepo} />;
+      case "knowledge":
+        return <KnowledgeSection />;
       default:
         return null;
     }
@@ -109,7 +116,7 @@ export default function HomePage() {
             borderColor: "divider",
             bgcolor: "background.paper",
             position: "fixed",
-            left: 0, 
+            left: 0,
             top: 0,
             pt: "64px", // Altura del header
             transform: showSidebar ? "translateX(0)" : "translateX(-100%)",
@@ -117,12 +124,12 @@ export default function HomePage() {
             zIndex: 10,
             overflowY: "hidden", // Importante: contenedor principal sin scroll
             display: "flex",
-            flexDirection: "column"
+            flexDirection: "column",
           }}
         >
           <RepositoryList />
         </Box>
-        
+
         {/* Contenido principal */}
         <Box
           sx={{

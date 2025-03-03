@@ -23,16 +23,17 @@ import {
   useTheme,
 } from "@mui/material";
 import {
+  BarChart2,
+  BookOpen,
   Bot,
+  CircleSlash,
   Code,
   GitPullRequest,
-  LineChart,
   LogOut,
   Menu as MenuIcon,
   MoreVertical,
   Settings,
   Shield,
-  TicketCheck,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -89,12 +90,13 @@ export function Header({
   };
 
   const sections = [
-    { id: "code", label: "Code", icon: Code },
-    { id: "issues", label: "Issues", icon: TicketCheck },
-    { id: "pull-requests", label: "Pull Requests", icon: GitPullRequest },
-    { id: "security", label: "Security", icon: Shield },
-    { id: "insights", label: "Insights", icon: LineChart },
-    { id: "agents", label: "AI Agents", icon: Bot },
+    { id: "code", icon: Code, label: "Code" },
+    { id: "pull-requests", icon: GitPullRequest, label: "Pull Requests" },
+    { id: "issues", icon: CircleSlash, label: "Issues" },
+    { id: "insights", icon: BarChart2, label: "Insights" },
+    { id: "security", icon: Shield, label: "Security" },
+    { id: "agents", icon: Bot, label: "Agents" },
+    { id: "knowledge", icon: BookOpen, label: "Knowledge" }, // Nueva sección
   ];
 
   return (

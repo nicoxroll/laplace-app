@@ -1,12 +1,12 @@
-import { User } from './user';
-import { LoadingState } from './common';
+import { LoadingState } from "./common";
+import { User } from "./user";
 
 // Tipos para Pull Requests
 export interface PullRequest {
   id: number;
   number: number;
   title: string;
-  state: 'open' | 'closed' | 'merged';
+  state: "open" | "closed" | "merged";
   created_at: string;
   updated_at: string;
   html_url: string;
@@ -39,7 +39,7 @@ export interface Issue {
   id: number;
   number: number;
   title: string;
-  state: 'open' | 'closed';
+  state: "open" | "closed";
   created_at: string;
   updated_at: string;
   html_url: string;
@@ -57,14 +57,14 @@ export interface Issue {
 // Tipos para Security
 export interface SecurityVulnerability {
   id: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: "low" | "medium" | "high" | "critical";
   title: string;
   description: string;
   affected_file: string;
   line_number?: number;
   fix_suggestion?: string;
   created_at: string;
-  status: 'open' | 'fixed' | 'dismissed';
+  status: "open" | "fixed" | "dismissed";
 }
 
 export interface SecurityScan {
@@ -107,8 +107,8 @@ export interface InsightData {
 export interface Agent {
   id: string;
   name: string;
-  type: 'analysis' | 'security' | 'documentation' | 'optimization';
-  status: 'active' | 'inactive' | 'busy' | 'error';
+  type: "analysis" | "security" | "documentation" | "optimization";
+  status: "active" | "inactive" | "busy" | "error";
   capabilities: string[];
   last_run?: string;
   current_task?: string;
@@ -124,4 +124,15 @@ export interface AgentTask {
   error?: string;
   started_at: string;
   completed_at?: string;
-} 
+}
+
+// Tipos para Knowledge
+export interface KnowledgeItem {
+  id: string;
+  name: string;
+  description: string;
+  size: string;
+  type: string;
+  created_at: string;
+  updated_at?: string;
+}

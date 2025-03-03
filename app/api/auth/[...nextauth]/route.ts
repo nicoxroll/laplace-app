@@ -25,6 +25,61 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      try {
+        // Solo intentar sincronizar si tenemos toda la información necesaria
+        if (user && account && profile) {
+          const apiUrl = "http://127.0.0.1:8000";
+
+          // Preparar los datos para el backend con mejor manejo de campos
+          const userData = {
+            provider_user_id: user.id || profile.sub || "", // Mejorar compatibilidad
+            provider: account.provider,
+            username:
+              (profile as any).login ||
+              (profile as any).username ||
+              user.email?.split("@")[0] ||
+              "user",
+            email: user.email,
+            name: user.name,
+            avatar: user.image,
+            access_token: account.access_token, // Incluir token para operaciones posteriores
+          };
+
+          console.log("Enviando datos a backend:", apiUrl, account.provider);
+
+          // Enviar datos al backend
+          const response = await fetch(
+            `${apiUrl}/auth/${account.provider}/callback`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify(userData),
+            }
+          );
+
+          if (!response.ok) {
+            console.error(
+              "Error al registrar usuario en backend:",
+              await response.text()
+            );
+          } else {
+            console.log(
+              "Usuario registrado/actualizado correctamente en backend"
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error conectando con API:", error);
+      }
+
+      // Continuar con el login siempre
+      return true;
+    },
+
     async jwt({ token, account, profile }) {
       if (account) {
         token.accessToken = account.access_token;
@@ -33,6 +88,7 @@ export const authOptions: AuthOptions = {
       }
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
         session.user.accessToken = token.accessToken as string;
