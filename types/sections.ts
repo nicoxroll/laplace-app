@@ -135,4 +135,5 @@ export interface KnowledgeItem {
   type: string;
   created_at: string;
   updated_at?: string;
+  user_id: string; // Añadir el ID del usuario propietario
 }

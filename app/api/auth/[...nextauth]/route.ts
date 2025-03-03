@@ -82,7 +82,8 @@ export const authOptions: AuthOptions = {
 
     async jwt({ token, account, profile }) {
       if (account) {
-        token.accessToken = account.access_token;
+        // Almacenar el token sin el prefijo 'Bearer '
+        token.accessToken = account.access_token; // Asegúrate que no tenga ya el prefijo 'Bearer '
         token.provider = account.provider;
         token.refreshToken = account.refresh_token;
       }
@@ -93,6 +94,7 @@ export const authOptions: AuthOptions = {
       if (session.user) {
         session.user.accessToken = token.accessToken as string;
         session.user.provider = token.provider as string;
+        session.user.id = token.sub as string; // Añadir el ID del usuario a la sesión
       }
       return session;
     },
