@@ -3,24 +3,23 @@
 import { SectionCard } from "@/components/ui/section-card";
 import { useFileUpload } from "@/hooks/useFileUpload";
 import { useKnowledge } from "@/hooks/useKnowledge";
-import { Alert, Box, Fab } from "@mui/material";
-import { AlertCircle, BookOpen, Plus } from "lucide-react";
-import { useState } from "react";
+import { Alert, Box, Fab, IconButton, Select, MenuItem } from "@mui/material";
+import { AlertCircle, BookOpen, Plus, X } from "lucide-react";
+import { useState, useEffect } from "react";
 import { DeleteConfirmDialog } from "./knowledge/DeleteConfirmDialog";
 import { KnowledgeForm } from "./knowledge/KnowledgeForm";
 import { KnowledgeTable } from "./knowledge/KnowledgeTable";
-import { error } from "console";
-import { size } from "lodash";
-import { icon } from "mermaid/dist/rendering-util/rendering-elements/shapes/icon.js";
-import { title } from "process";
+import { useSession } from "next-auth/react";
+import { RepositoryService, fetchRepositories } from "@/services/repository-service";
+import { Repository } from "@/types/repository";
 
 export function KnowledgeSection() {
   // Estados y lógica principal desde hooks personalizados
   const {
     knowledgeData,
-    loading,
-    error,
-    setError,
+    loading: knowledgeLoading,
+    error: knowledgeError,
+    setError: setKnowledgeError,
     modalOpen,
     setModalOpen,
     modalMode,
@@ -46,10 +45,39 @@ export function KnowledgeSection() {
     handleFileChange,
     handleClearFile,
     uploadAndIndexFile,
-  } = useFileUpload(setError);
+  } = useFileUpload(setKnowledgeError);
 
   // Estado local para mostrar errores específicos del formulario
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Estados para repositorios
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { data: session } = useSession();
+
+  // Cargar repositorios al iniciar
+  useEffect(() => {
+    async function fetchRepos() {
+      if (!session) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const repos = await fetchRepositories(session);
+        setRepositories(repos);
+      } catch (err) {
+        console.error("Error fetching repositories:", err);
+        setError(err instanceof Error ? err.message : "Error cargando repositorios");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchRepos();
+  }, [session]);
 
   // Función combinada para guardar (primero indexa si hay archivo, luego guarda)
   const handleSave = async () => {
@@ -95,13 +123,23 @@ export function KnowledgeSection() {
         }
       >
         {/* Mostrar error si existe */}
-        {error && (
+        {knowledgeError && (
           <Alert
             severity="error"
             icon={<AlertCircle size={20} />}
             sx={{ mt: 2, mb: 2 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setKnowledgeError(null)}
+              >
+                <X size={18} />
+              </IconButton>
+            }
           >
-            {error}
+            {knowledgeError}
           </Alert>
         )}
 
@@ -109,7 +147,7 @@ export function KnowledgeSection() {
         <Box sx={{ mt: 2 }}>
           <KnowledgeTable
             data={knowledgeData}
-            loading={loading}
+            loading={knowledgeLoading}
             onEdit={(knowledge) => {
               setModalOpen(true);
               // La lógica de edición se maneja en useKnowledge
@@ -138,7 +176,24 @@ export function KnowledgeSection() {
           handleClearFile,
         }}
         error={formError}
-      />
+      >
+        {/* Para el select de repositorios: */}
+        <Select
+          label="Repositorio"
+          name="repository_id"
+          value={newKnowledge.repository_id || ""}
+          onChange={handleInputChange}
+          disabled={loading}
+        >
+          <MenuItem value="">Ninguno</MenuItem>
+          {repositories.map((repo) => (
+            <MenuItem key={`${repo.provider}-${repo.id}`} value={repo.id}>
+              {repo.provider === "github" ? "GitHub: " : "GitLab: "}
+              {repo.full_name}
+            </MenuItem>
+          ))}
+        </Select>
+      </KnowledgeForm>
 
       {/* Diálogo de confirmación de eliminación */}
       <DeleteConfirmDialog

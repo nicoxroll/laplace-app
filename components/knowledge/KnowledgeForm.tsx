@@ -3,6 +3,7 @@ import { Repository, useRepositories } from "@/hooks/useRepositories";
 import { modalTheme } from "@/styles/modalTheme";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -20,9 +21,10 @@ import {
   Select,
   SelectChangeEvent,
   TextField,
+  Typography,
 } from "@mui/material";
-import { File, Trash, Upload } from "lucide-react";
-import { useEffect } from "react";
+import { File, Trash, Upload, X, FileWarning } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface FileProps {
   selectedFile: File | null;
@@ -53,6 +55,7 @@ interface KnowledgeFormProps {
   isIndexing: boolean;
   fileProps: FileProps;
   error: string | null;
+  onError: (error: string | null) => void;
 }
 
 export function KnowledgeForm({
@@ -66,6 +69,7 @@ export function KnowledgeForm({
   isIndexing,
   fileProps,
   error,
+  onError,
 }: KnowledgeFormProps) {
   const {
     selectedFile,
@@ -78,6 +82,11 @@ export function KnowledgeForm({
 
   // Usar el hook para cargar los repositorios
   const { repositories, loadingRepos, fetchRepositories } = useRepositories();
+  
+  // Estado para controlar la selección exclusiva
+  const [selectionMode, setSelectionMode] = useState<"repository" | "file" | null>(
+    knowledge.repository_id ? "repository" : (selectedFile ? "file" : null)
+  );
 
   // Actualizar los repositorios cuando se abre el diálogo
   useEffect(() => {
@@ -85,6 +94,65 @@ export function KnowledgeForm({
       fetchRepositories();
     }
   }, [open, fetchRepositories]);
+  
+  // Actualizar el modo de selección cuando cambian los props
+  useEffect(() => {
+    if (knowledge.repository_id) {
+      setSelectionMode("repository");
+    } else if (selectedFile) {
+      setSelectionMode("file");
+    } else {
+      setSelectionMode(null);
+    }
+  }, [knowledge.repository_id, selectedFile]);
+
+  // Manejador de cambio de repositorio con Autocomplete
+  const handleRepositoryChange = (event: any, newValue: Repository | null) => {
+    // Si seleccionamos un repositorio, limpiar el archivo si hay uno
+    if (newValue && selectedFile) {
+      handleClearFile();
+    }
+    
+    // Actualizar el modo de selección
+    setSelectionMode(newValue ? "repository" : null);
+    
+    // Crear un evento sintético para el onChange
+    const customEvent = {
+      target: {
+        name: "repository_id",
+        value: newValue ? newValue.id : "",
+      },
+    } as React.ChangeEvent<HTMLInputElement>;
+
+    onChange(customEvent);
+  };
+  
+  // Manejador personalizado para selección de archivo
+  const handleFileChangeWithMode = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Si hay un archivo seleccionado, limpiar la selección de repositorio
+    if (e.target.files && e.target.files.length > 0 && knowledge.repository_id) {
+      const customEvent = {
+        target: {
+          name: "repository_id",
+          value: "",
+        },
+      } as React.ChangeEvent<HTMLInputElement>;
+      
+      onChange(customEvent);
+    }
+    
+    // Actualizar el modo de selección
+    setSelectionMode("file");
+    
+    // Llamar al manejador original
+    handleFileChange(e);
+  };
+  
+  // Función para limpiar archivo manteniendo el modo
+  const handleClearFileWithMode = () => {
+    handleClearFile();
+    setSelectionMode(null);
+  };
 
   const isSubmitDisabled =
     creating || isIndexing || !knowledge.name || (selectedFile && !isIndexed);
@@ -97,17 +165,6 @@ export function KnowledgeForm({
       : mode === "create"
       ? "Crear"
       : "Actualizar";
-
-  const handleRepositoryChange = (event: SelectChangeEvent) => {
-    const customEvent = {
-      target: {
-        name: "repository_id",
-        value: event.target.value,
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
-
-    onChange(customEvent);
-  };
 
   return (
     <Dialog
@@ -134,7 +191,20 @@ export function KnowledgeForm({
       </DialogTitle>
       <DialogContent sx={{ bgcolor: modalTheme.paper, pt: 2 }}>
         {error && (
-          <Alert severity="error" sx={{ mb: 2, mt: 1 }}>
+          <Alert
+            severity="error"
+            sx={{ mb: 2, mt: 1 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => onError(null)}
+              >
+                <X size={18} />
+              </IconButton>
+            }
+          >
             {error}
           </Alert>
         )}
@@ -207,155 +277,184 @@ export function KnowledgeForm({
           }}
         />
 
-        {/* Selector de repositorio */}
-        <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-          <InputLabel
-            id="repository-select-label"
-            sx={{ color: modalTheme.input.label }}
-          >
-            Repositorio
-          </InputLabel>
-          <Select
-            labelId="repository-select-label"
-            id="repository-select"
-            name="repository_id"
-            value={
-              knowledge.repository_id ? String(knowledge.repository_id) : ""
-            }
-            label="Repositorio"
-            onChange={handleRepositoryChange}
-            disabled={creating || isIndexing || loadingRepos}
-            sx={{
-              color: modalTheme.text.primary,
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: modalTheme.input.border,
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: modalTheme.input.hoverBorder,
-              },
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: modalTheme.input.focusBorder,
-              },
-              "& .MuiSvgIcon-root": {
-                color: modalTheme.text.secondary,
-              },
-            }}
-          >
-            {loadingRepos ? (
-              <MenuItem disabled value="">
-                <CircularProgress size={20} sx={{ mr: 1 }} /> Cargando
-                repositorios...
-              </MenuItem>
-            ) : (
-              <>
-                <MenuItem value="">Seleccionar repositorio</MenuItem>
-                {repositories.map((repo: Repository) => (
-                  <MenuItem key={repo.id} value={repo.id.toString()}>
-                    {repo.name}
-                  </MenuItem>
-                ))}
-              </>
-            )}
-          </Select>
-          <FormHelperText sx={{ color: modalTheme.text.secondary }}>
-            Selecciona el repositorio donde se almacenará este conocimiento
-          </FormHelperText>
-        </FormControl>
+        {/* Opciones de origen: Repositorio o Archivo */}
+        <Typography variant="subtitle2" color={modalTheme.text.secondary} sx={{ mb: 1 }}>
+          Origen del conocimiento (selecciona una opción):
+        </Typography>
 
-        {mode === "create" && (
-          <Box
-            sx={{
-              mb: 2,
-              mt: 1,
-              border: `1px dashed ${modalTheme.border}`,
-              borderRadius: 1,
-              p: 2,
-              bgcolor: modalTheme.background,
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-              disabled={creating || isIndexing}
+        {/* Autocomplete para repositorios */}
+        <Autocomplete
+          id="repository-autocomplete"
+          options={repositories}
+          loading={loadingRepos}
+          disabled={creating || isIndexing || selectionMode === "file"}
+          getOptionLabel={(option) => 
+            `${option.provider === "github" ? "GitHub: " : "GitLab: "} ${option.full_name}`
+          }
+          value={knowledge.repository_id ? 
+            repositories.find(r => r.id.toString() === knowledge.repository_id?.toString()) || null :
+            null
+          }
+          onChange={handleRepositoryChange}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Seleccionar repositorio"
+              margin="dense"
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {loadingRepos ? <CircularProgress color="inherit" size={20} /> : null}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+              sx={{
+                mb: 2,
+                "& .MuiOutlinedInput-root": {
+                  color: modalTheme.text.primary,
+                  "& fieldset": {
+                    borderColor: modalTheme.input.border,
+                  },
+                  "&:hover fieldset": {
+                    borderColor: modalTheme.input.hoverBorder,
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: modalTheme.input.focusBorder,
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  color: modalTheme.input.label,
+                  "&.Mui-focused": {
+                    color: modalTheme.input.labelFocus,
+                  },
+                },
+              }}
             />
-
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Button
-                variant="outlined"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={creating || isIndexing}
-                startIcon={<Upload size={18} />}
-                sx={{
-                  color: modalTheme.primary.main,
-                  borderColor: modalTheme.primary.main,
-                  "&:hover": {
-                    backgroundColor: modalTheme.primary.hover,
-                    borderColor: modalTheme.primary.main,
-                  },
-                }}
-              >
-                Seleccionar archivo
-              </Button>
-            </Box>
-
-            {selectedFile && (
-              <Box
-                sx={{
-                  mt: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Chip
-                  icon={<File size={16} />}
-                  label={`${selectedFile.name} (${(
-                    selectedFile.size / 1024
-                  ).toFixed(2)} KB)`}
-                  variant="outlined"
-                  color={isIndexed ? "success" : "default"}
-                  sx={{
-                    color: modalTheme.text.primary,
-                    borderColor: isIndexed ? "success.main" : modalTheme.border,
-                  }}
-                />
-                <IconButton
-                  size="small"
-                  onClick={handleClearFile}
-                  sx={{ ml: 1 }}
-                  color="error"
-                >
-                  <Trash size={16} />
-                </IconButton>
+          )}
+          renderOption={(props, option) => (
+            <li {...props}>
+              <Box component="span" sx={{ 
+                mr: 1, 
+                color: option.provider === "github" ? "#6e5494" : "#fc6d26" 
+              }}>
+                {option.provider === "github" ? "GitHub:" : "GitLab:"}
               </Box>
-            )}
+              {option.full_name}
+            </li>
+          )}
+        />
 
-            {isIndexing && (
-              <LinearProgress
-                variant="determinate"
-                value={indexProgress}
+        {/* Divisor con "o" */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          my: 2, 
+          opacity: creating || isIndexing ? 0.5 : 1 
+        }}>
+          <Box sx={{ flex: 1, height: '1px', bgcolor: modalTheme.border }} />
+          <Typography variant="body2" color={modalTheme.text.secondary} sx={{ mx: 2 }}>
+            o
+          </Typography>
+          <Box sx={{ flex: 1, height: '1px', bgcolor: modalTheme.border }} />
+        </Box>
+
+        {/* Sección de carga de archivos */}
+        <Box
+          sx={{
+            mb: 2,
+            mt: 1,
+            border: `1px dashed ${modalTheme.border}`,
+            borderRadius: 1,
+            p: 2,
+            bgcolor: modalTheme.background,
+            opacity: selectionMode === "repository" ? 0.5 : 1,
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
+            style={{ display: "none" }}
+            onChange={handleFileChangeWithMode}
+            disabled={creating || isIndexing || selectionMode === "repository"}
+          />
+
+          <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+            <Button
+              variant="outlined"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={creating || isIndexing || selectionMode === "repository"}
+              startIcon={<Upload size={18} />}
+              sx={{
+                color: modalTheme.primary.main,
+                borderColor: modalTheme.primary.main,
+                "&:hover": {
+                  backgroundColor: modalTheme.primary.hover,
+                  borderColor: modalTheme.primary.main,
+                },
+                "&.Mui-disabled": {
+                  opacity: 0.5,
+                },
+              }}
+            >
+              Seleccionar archivo
+            </Button>
+          </Box>
+
+          {selectedFile && (
+            <Box
+              sx={{
+                mt: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Chip
+                icon={<File size={16} />}
+                label={`${selectedFile.name} (${(
+                  selectedFile.size / 1024
+                ).toFixed(2)} KB)`}
+                variant="outlined"
+                color={isIndexed ? "success" : "default"}
                 sx={{
-                  mt: 1,
-                  bgcolor: modalTheme.border,
-                  "& .MuiLinearProgress-bar": {
-                    bgcolor: modalTheme.primary.main,
-                  },
+                  color: modalTheme.text.primary,
+                  borderColor: isIndexed ? "success.main" : modalTheme.border,
                 }}
               />
-            )}
+              <IconButton
+                size="small"
+                onClick={handleClearFileWithMode}
+                sx={{ ml: 1 }}
+                color="error"
+              >
+                <Trash size={16} />
+              </IconButton>
+            </Box>
+          )}
 
-            {isIndexed && (
-              <Alert severity="success" sx={{ mt: 1 }}>
-                Archivo indexado correctamente
-              </Alert>
-            )}
-          </Box>
-        )}
+          {isIndexing && (
+            <LinearProgress
+              variant="determinate"
+              value={indexProgress}
+              sx={{
+                mt: 1,
+                bgcolor: modalTheme.border,
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: modalTheme.primary.main,
+                },
+              }}
+            />
+          )}
 
-        {/* Content field removed as requested */}
+          {isIndexed && (
+            <Alert severity="success" sx={{ mt: 1 }}>
+              Archivo indexado correctamente
+            </Alert>
+          )}
+        </Box>
       </DialogContent>
 
       <DialogActions

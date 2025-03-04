@@ -370,6 +370,38 @@ export class KnowledgeService {
     }
   }
 
+  // Añadir un nuevo método para obtener los agentes asociados a un conocimiento
+
+  /**
+   * Obtiene los agentes asociados a los items de conocimiento
+   */
+  public async getAssociatedAgents(
+    token: string
+  ): Promise<Record<string, string[]>> {
+    try {
+      const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+      const response = await fetch(
+        `${this.baseUrl}/knowledge/items/agents-mapping`,
+        {
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status} ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error obteniendo agentes asociados:", error);
+      return {}; // Devolver un objeto vacío en caso de error
+    }
+  }
+
   // Perfil de respaldo para desarrollo
   private getFallbackProfile(): any {
     return {

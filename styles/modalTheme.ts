@@ -1,8 +1,8 @@
 export const modalTheme = {
   // Main colors
-  background: "#121212",
-  paper: "#1E1E1E",
-  headerFooter: "#161616",
+  background: "#0D1117", // Updated to match app background
+  paper: "#0D1117", // Updated to match app background
+  headerFooter: "#0D1117", // Updated to match app background
   text: {
     primary: "#FFFFFF",
     secondary: "#B0B0B0",

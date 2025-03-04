@@ -372,6 +372,7 @@ export function useAgents(repository: any) {
     agentsData,
     loading,
     error,
+    setError, // Asegúrate de incluir esto
     modalOpen,
     modalMode,
     setModalOpen,

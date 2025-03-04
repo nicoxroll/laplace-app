@@ -19,8 +19,16 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { AlertCircle, Bot, Edit, Plus, Trash } from "lucide-react";
+import { AlertCircle, Bot, Edit, Plus, Trash, X } from "lucide-react";
 import { useEffect } from "react";
+import { modalTheme } from "@/styles/modalTheme";
+import zIndex from "@mui/material/styles/zIndex";
+import { error } from "console";
+import { size } from "lodash";
+import { icon } from "mermaid/dist/rendering-util/rendering-elements/shapes/icon.js";
+import { type } from "os";
+import { format } from "path";
+import { title } from "process";
 
 // Actualización de getColumns con el nuevo estilo
 const getColumns = () => [
@@ -127,12 +135,14 @@ export function AgentsSection({ repository }: { repository: any }) {
     agentsData,
     loading,
     error,
+    setError, // 👈 Añadir esta línea
     modalOpen,
-    modalMode,
     setModalOpen,
+    modalMode,
+    currentAgent,
     creating,
     newAgent,
-    setNewAgent, // Make sure to get this from the hook
+    setNewAgent,
     handleInputChange,
     handleSaveAgent,
     deleting,
@@ -177,6 +187,16 @@ export function AgentsSection({ repository }: { repository: any }) {
             severity="error"
             icon={<AlertCircle size={20} />}
             sx={{ mt: 2, mb: 2 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setError(null)}
+              >
+                <X size={18} />
+              </IconButton>
+            }
           >
             {error}
           </Alert>
@@ -230,24 +250,22 @@ export function AgentsSection({ repository }: { repository: any }) {
         maxWidth="sm"
         PaperProps={{
           sx: {
-            backgroundColor: "background.paper",
-            color: "text.primary",
-            border: "1px solid",
-            borderColor: "divider",
+            backgroundColor: modalTheme.paper,
+            color: modalTheme.text.primary,
+            border: `1px solid ${modalTheme.border}`,
             borderRadius: 1,
           },
         }}
       >
         <DialogTitle
           sx={{
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            bgcolor: "background.default",
+            borderBottom: `1px solid ${modalTheme.border}`,
+            bgcolor: modalTheme.headerFooter,
           }}
         >
           {modalMode === "create" ? "Crear nuevo agente" : "Editar agente"}
         </DialogTitle>
-        <DialogContent sx={{ bgcolor: "background.paper", pt: 2 }}>
+        <DialogContent sx={{ bgcolor: modalTheme.paper, pt: 2 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -262,6 +280,24 @@ export function AgentsSection({ repository }: { repository: any }) {
             sx={{
               mb: 2,
               mt: 1,
+              "& .MuiOutlinedInput-root": {
+                color: modalTheme.text.primary,
+                "& fieldset": {
+                  borderColor: modalTheme.input.border,
+                },
+                "&:hover fieldset": {
+                  borderColor: modalTheme.input.hoverBorder,
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: modalTheme.input.focusBorder,
+                },
+              },
+              "& .MuiInputLabel-root": {
+                color: modalTheme.input.label,
+                "&.Mui-focused": {
+                  color: modalTheme.input.labelFocus,
+                },
+              },
             }}
           />
           <TextField
@@ -276,6 +312,24 @@ export function AgentsSection({ repository }: { repository: any }) {
             disabled={creating}
             sx={{
               mb: 2,
+              "& .MuiOutlinedInput-root": {
+                color: modalTheme.text.primary,
+                "& fieldset": {
+                  borderColor: modalTheme.input.border,
+                },
+                "&:hover fieldset": {
+                  borderColor: modalTheme.input.hoverBorder,
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: modalTheme.input.focusBorder,
+                },
+              },
+              "& .MuiInputLabel-root": {
+                color: modalTheme.input.label,
+                "&.Mui-focused": {
+                  color: modalTheme.input.labelFocus,
+                },
+              },
             }}
           />
 
@@ -292,6 +346,24 @@ export function AgentsSection({ repository }: { repository: any }) {
             disabled={creating}
             sx={{
               mb: 2,
+              "& .MuiOutlinedInput-root": {
+                color: modalTheme.text.primary,
+                "& fieldset": {
+                  borderColor: modalTheme.input.border,
+                },
+                "&:hover fieldset": {
+                  borderColor: modalTheme.input.hoverBorder,
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: modalTheme.input.focusBorder,
+                },
+              },
+              "& .MuiInputLabel-root": {
+                color: modalTheme.input.label,
+                "&.Mui-focused": {
+                  color: modalTheme.input.labelFocus,
+                },
+              },
             }}
           />
 
@@ -317,6 +389,26 @@ export function AgentsSection({ repository }: { repository: any }) {
                 label="Conocimiento asociado (opcional)"
                 placeholder="Seleccionar items de conocimiento"
                 margin="dense"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    color: modalTheme.text.primary,
+                    "& fieldset": {
+                      borderColor: modalTheme.input.border,
+                    },
+                    "&:hover fieldset": {
+                      borderColor: modalTheme.input.hoverBorder,
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: modalTheme.input.focusBorder,
+                    },
+                  },
+                  "& .MuiInputLabel-root": {
+                    color: modalTheme.input.label,
+                    "&.Mui-focused": {
+                      color: modalTheme.input.labelFocus,
+                    },
+                  },
+                }}
               />
             )}
             renderTags={(value, getTagProps) =>
@@ -329,13 +421,18 @@ export function AgentsSection({ repository }: { repository: any }) {
                     color={index === 0 ? "primary" : "default"}
                     size="small"
                     variant={index === 0 ? "filled" : "outlined"}
+                    sx={{
+                      backgroundColor:
+                        index === 0 ? modalTheme.primary.main : "transparent",
+                      color: index === 0 ? "#FFFFFF" : modalTheme.text.primary,
+                      borderColor:
+                        index === 0 ? "transparent" : modalTheme.border,
+                    }}
                   />
                 );
               })
             }
-            sx={{
-              mb: 2,
-            }}
+            sx={{ mb: 2 }}
             limitTags={3}
             filterSelectedOptions
           />
@@ -343,18 +440,18 @@ export function AgentsSection({ repository }: { repository: any }) {
         <DialogActions
           sx={{
             p: 2,
-            borderTop: "1px solid",
-            borderColor: "divider",
-            bgcolor: "background.default",
+            borderTop: `1px solid ${modalTheme.border}`,
+            bgcolor: modalTheme.headerFooter,
           }}
         >
           <Button
             onClick={() => setModalOpen(false)}
             disabled={creating}
             sx={{
-              color: "text.secondary",
+              color: modalTheme.text.secondary,
               "&:hover": {
-                backgroundColor: "action.hover",
+                backgroundColor: modalTheme.background,
+                color: modalTheme.text.primary,
               },
             }}
           >
@@ -365,7 +462,17 @@ export function AgentsSection({ repository }: { repository: any }) {
             variant="contained"
             disabled={creating || !newAgent.name}
             startIcon={creating ? <CircularProgress size={20} /> : null}
-            color="success"
+            sx={{
+              bgcolor: modalTheme.success.main,
+              color: "#ffffff",
+              "&:hover": {
+                bgcolor: modalTheme.success.hover,
+              },
+              "&.Mui-disabled": {
+                bgcolor: modalTheme.background,
+                color: modalTheme.text.secondary,
+              },
+            }}
           >
             {creating
               ? "Guardando..."
@@ -382,25 +489,23 @@ export function AgentsSection({ repository }: { repository: any }) {
         onClose={() => !deleting && setDeleteDialogOpen(false)}
         PaperProps={{
           sx: {
-            backgroundColor: "background.paper",
-            color: "text.primary",
-            border: "1px solid",
-            borderColor: "divider",
+            backgroundColor: modalTheme.paper,
+            color: modalTheme.text.primary,
+            border: `1px solid ${modalTheme.border}`,
             borderRadius: 1,
           },
         }}
       >
         <DialogTitle
           sx={{
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            bgcolor: "background.default",
+            borderBottom: `1px solid ${modalTheme.border}`,
+            bgcolor: modalTheme.headerFooter,
           }}
         >
           Confirmar eliminación
         </DialogTitle>
-        <DialogContent sx={{ bgcolor: "background.paper", pt: 2, mt: 1 }}>
-          <Typography>
+        <DialogContent sx={{ bgcolor: modalTheme.paper, pt: 2, mt: 1 }}>
+          <Typography color={modalTheme.text.primary}>
             ¿Estás seguro de que deseas eliminar el agente "
             {agentToDelete?.name}"? Esta acción no se puede deshacer.
           </Typography>
@@ -408,18 +513,18 @@ export function AgentsSection({ repository }: { repository: any }) {
         <DialogActions
           sx={{
             p: 2,
-            borderTop: "1px solid",
-            borderColor: "divider",
-            bgcolor: "background.default",
+            borderTop: `1px solid ${modalTheme.border}`,
+            bgcolor: modalTheme.headerFooter,
           }}
         >
           <Button
             onClick={() => setDeleteDialogOpen(false)}
             disabled={deleting}
             sx={{
-              color: "text.secondary",
+              color: modalTheme.text.secondary,
               "&:hover": {
-                backgroundColor: "action.hover",
+                backgroundColor: modalTheme.background,
+                color: modalTheme.text.primary,
               },
             }}
           >
@@ -431,6 +536,17 @@ export function AgentsSection({ repository }: { repository: any }) {
             variant="contained"
             disabled={deleting}
             startIcon={deleting ? <CircularProgress size={20} /> : null}
+            sx={{
+              bgcolor: modalTheme.error.main,
+              color: "#ffffff",
+              "&:hover": {
+                bgcolor: "error.dark",
+              },
+              "&.Mui-disabled": {
+                bgcolor: modalTheme.background,
+                color: modalTheme.text.secondary,
+              },
+            }}
           >
             {deleting ? "Eliminando..." : "Eliminar"}
           </Button>

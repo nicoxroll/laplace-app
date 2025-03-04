@@ -1,94 +1,11 @@
 // components/knowledge/KnowledgeTable.tsx
 import { DataTable } from "@/components/ui/data-table";
 import { KnowledgeItem } from "@/types/sections";
-import { Box, CircularProgress, IconButton, Typography } from "@mui/material";
-import { Edit, Trash } from "lucide-react"; // Add this import for the icon components
-
-// Columnas para la tabla definidas fuera del componente para evitar renders innecesarios
-const getColumns = () => [
-  {
-    id: "name",
-    label: "Nombre",
-    format: (value: string) => (
-      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-        {value}
-      </Typography>
-    ),
-  },
-  {
-    id: "description",
-    label: "Descripción",
-    format: (value: string) => (
-      <Typography
-        variant="body2"
-        sx={{
-          color: "text.secondary",
-          maxWidth: 400,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {value || "Sin descripción"}
-      </Typography>
-    ),
-  },
-  {
-    id: "created_at",
-    label: "Creado",
-    format: (value: string) => (
-      <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {new Date(value).toLocaleDateString()}
-      </Typography>
-    ),
-  },
-  {
-    id: "base_name",
-    label: "Base",
-    format: (value: string) => (
-      <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {value || "General"}
-      </Typography>
-    ),
-  },
-  {
-    id: "actions",
-    label: "Acciones",
-    align: "right" as const,
-    sortable: false,
-    format: (value: any, row: KnowledgeItem) => (
-      <Box sx={{ display: "flex", justifyContent: "flex-end", minWidth: 110 }}>
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            window.dispatchEvent(
-              new CustomEvent("edit-knowledge", { detail: row })
-            );
-          }}
-          sx={{ color: "primary.main", mr: 1 }}
-        >
-          <Edit size={18} />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            window.dispatchEvent(
-              new CustomEvent("delete-knowledge", { detail: row })
-            );
-          }}
-          sx={{ color: "error.main" }}
-        >
-          <Trash size={18} />
-        </IconButton>
-      </Box>
-    ),
-  },
-];
+import { Avatar, AvatarGroup, Box, CircularProgress, Tooltip, Typography, IconButton } from "@mui/material";
+import { User, Edit, Trash } from "lucide-react";
 
 interface KnowledgeTableProps {
-  data: KnowledgeItem[] | undefined; // Permitir undefined
+  data: KnowledgeItem[];
   loading: boolean;
   onEdit?: (knowledge: KnowledgeItem) => void;
   onDelete?: (knowledge: KnowledgeItem) => void;
@@ -96,22 +13,148 @@ interface KnowledgeTableProps {
 }
 
 export function KnowledgeTable({
-  data = [], // Proporcionar un array vacío como valor predeterminado
+  data = [],
   loading,
   onEdit,
   onDelete,
   onRowClick,
 }: KnowledgeTableProps) {
-  const knowledgeData = data || []; // Asegurar que siempre sea un array
-
-  const columns = getColumns();
-
-  const handleRowClick = (row: KnowledgeItem) => {
-    if (onRowClick) {
-      onRowClick(row);
+  // Definir columnas
+  const columns = [
+    {
+      id: "name",
+      label: "Nombre",
+      format: (value: string) => (
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {value}
+        </Typography>
+      ),
+    },
+    {
+      id: "description",
+      label: "Descripción",
+      format: (value: string) => (
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            maxWidth: 400,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {value || "Sin descripción"}
+        </Typography>
+      ),
+    },
+    {
+      id: "associated_agents",
+      label: "Agentes",
+      format: (value: string[], row: KnowledgeItem) => (
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          {value && value.length > 0 ? (
+            <AvatarGroup 
+              max={3}
+              sx={{ 
+                '& .MuiAvatar-root': {
+                  width: 28, 
+                  height: 28, 
+                  fontSize: '0.75rem',
+                  bgcolor: '#161b22',
+                  border: '1px solid #30363d',
+                  color: '#e6edf3'
+                }
+              }}
+            >
+              {value.map((agentName, index) => (
+                <Tooltip key={index} title={agentName}>
+                  <Avatar
+                    sx={{ 
+                      bgcolor: getColorFromString(agentName)
+                    }}
+                  >
+                    {agentName.charAt(0).toUpperCase()}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </AvatarGroup>
+          ) : (
+            <Typography variant="body2" sx={{ color: "text.secondary", fontSize: '0.75rem' }}>
+              Ninguno
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
+      id: "created_at",
+      label: "Creado",
+      format: (value: string) => (
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          {new Date(value).toLocaleDateString()}
+        </Typography>
+      ),
+    },
+    {
+      id: "base_name",
+      label: "Base",
+      format: (value: string) => (
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          {value || "General"}
+        </Typography>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Acciones",
+      align: "right" as const,
+      sortable: false,
+      format: (value: any, row: KnowledgeItem) => (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", minWidth: 110 }}>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("edit-knowledge", { detail: row })
+              );
+            }}
+            sx={{ color: "primary.main", mr: 1 }}
+          >
+            <Edit size={18} />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("delete-knowledge", { detail: row })
+              );
+            }}
+            sx={{ color: "error.main" }}
+          >
+            <Trash size={18} />
+          </IconButton>
+        </Box>
+      ),
+    },
+  ];
+  
+  // Función auxiliar para generar colores consistentes basados en strings
+  function getColorFromString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
-    window.dispatchEvent(new CustomEvent("select-knowledge", { detail: row }));
-  };
+    
+    const colors = [
+      '#0969da', '#1a7f37', '#9e6a03', '#8250df', '#cf222e',
+      '#116329', '#953800', '#57606a', '#6639ba', '#a475f9'
+    ];
+    
+    return colors[Math.abs(hash) % colors.length];
+  }
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -137,13 +180,12 @@ export function KnowledgeTable({
 
       <DataTable
         columns={columns}
-        rows={knowledgeData} // Usar la variable asegurada
-        rowsPerPageOptions={[3, 5, 10]}
-        title="Documentos de conocimiento"
-        onRowClick={handleRowClick}
+        rows={data}
+        title="Conocimiento"
+        onRowClick={onRowClick}
       />
 
-      {!loading && knowledgeData.length === 0 && (
+      {!loading && data.length === 0 && (
         <Typography
           variant="body2"
           color="text.secondary"

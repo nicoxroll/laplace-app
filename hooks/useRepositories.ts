@@ -1,22 +1,15 @@
 // hooks/useRepositories.ts
-import { KnowledgeService } from "@/services/knowledge-service";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
-
-export interface Repository {
-  id: number;
-  name: string;
-  description?: string;
-}
+import { Repository, fetchRepositories } from "@/services/repository-service";
 
 export function useRepositories() {
   const { data: session } = useSession();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const knowledgeService = KnowledgeService.getInstance();
 
-  const fetchRepositories = useCallback(async () => {
+  const fetchRepos = useCallback(async () => {
     if (!session?.user?.accessToken) {
       setRepositories([]);
       setLoadingRepos(false);
@@ -27,15 +20,9 @@ export function useRepositories() {
       setLoadingRepos(true);
       setError(null);
 
-      const provider = session.user.provider || "github";
-      const jwtToken = await knowledgeService.exchangeToken(
-        session.user.accessToken,
-        provider
-      );
-
-      // Ajusta esta llamada al servicio según tu API
-      const data = await knowledgeService.getRepositories(`Bearer ${jwtToken}`);
-      setRepositories(data);
+      // Usar la función de repository-service en lugar de KnowledgeService
+      const repos = await fetchRepositories(session);
+      setRepositories(repos);
     } catch (err) {
       console.error("Error fetching repositories:", err);
       setError(
@@ -45,34 +32,41 @@ export function useRepositories() {
       // Fallback data para desarrollo
       setRepositories([
         {
-          id: 1,
-          name: "Repositorio General",
+          id: "1",
+          name: "example-repo",
+          full_name: "user/example-repo",
           description: "Repositorio predeterminado",
+          private: false,
+          provider: "github", 
+          html_url: "https://github.com/user/example-repo",
+          default_branch: "main"
         },
         {
-          id: 2,
-          name: "Documentación Técnica",
-          description: "Para documentos técnicos",
-        },
-        {
-          id: 3,
-          name: "Manuales de Usuario",
-          description: "Guías para usuarios finales",
+          id: "2",
+          name: "documentation",
+          full_name: "user/documentation",
+          description: "Documentación técnica",
+          private: false,
+          provider: "github",
+          html_url: "https://github.com/user/documentation",
+          default_branch: "main"
         },
       ]);
     } finally {
       setLoadingRepos(false);
     }
-  }, [session, knowledgeService]);
+  }, [session]);
 
   useEffect(() => {
-    fetchRepositories();
-  }, [fetchRepositories]);
+    fetchRepos();
+  }, [fetchRepos]);
 
   return {
     repositories,
     loadingRepos,
-    fetchRepositories,
+    fetchRepositories: fetchRepos,
     error: error,
   };
 }
+
+// No necesitamos exportar la interfaz Repository, ya que la importamos de repository-service

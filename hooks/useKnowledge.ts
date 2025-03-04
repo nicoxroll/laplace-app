@@ -30,12 +30,26 @@ export function useKnowledge() {
     repository_id: "", // Agregar este campo
   });
 
+  // Añadir estado y función para obtener agentes asociados
+  const [associatedAgents, setAssociatedAgents] = useState<Record<string, string[]>>({});
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setNewKnowledge((prev) => ({ ...prev, [name]: value }));
   };
+
+  const fetchAssociatedAgents = useCallback(async (jwtToken: string) => {
+    try {
+      const agentsMap = await knowledgeService.getAssociatedAgents(`Bearer ${jwtToken}`);
+      setAssociatedAgents(agentsMap);
+      return agentsMap;
+    } catch (err) {
+      console.error("Error obteniendo agentes asociados:", err);
+      return {};
+    }
+  }, [knowledgeService]);
 
   const fetchKnowledgeData = useCallback(async () => {
     if (!session?.user?.accessToken) {
@@ -62,7 +76,17 @@ export function useKnowledge() {
         `Bearer ${jwtToken}`,
         userId
       );
-      setKnowledgeData(data);
+      
+      // Obtener agentes asociados una sola vez
+      const agentsMap = await fetchAssociatedAgents(jwtToken);
+      
+      // Añadir el campo associated_agents a los datos
+      const dataWithAgents = data.map(item => ({
+        ...item,
+        associated_agents: agentsMap[item.id] || []
+      }));
+      
+      setKnowledgeData(dataWithAgents);
     } catch (err) {
       console.error("Error fetching knowledge data:", err);
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -71,7 +95,7 @@ export function useKnowledge() {
     } finally {
       setLoading(false);
     }
-  }, [session, knowledgeService]);
+  }, [session, knowledgeService, fetchAssociatedAgents]);
 
   const saveKnowledge = async (
     content: string,
@@ -225,6 +249,9 @@ export function useKnowledge() {
     setDeleteDialogOpen,
     knowledgeToDelete,
     deleting,
+
+    // Añadir associatedAgents
+    associatedAgents,
 
     // Acciones
     handleInputChange,
