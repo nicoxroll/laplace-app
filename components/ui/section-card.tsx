@@ -1,57 +1,52 @@
 "use client";
 
-import { Box, Typography } from "@mui/material";
+import { Box, Paper, Typography } from "@mui/material";
 import { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import React from "react";
 
 interface SectionCardProps {
   icon: LucideIcon;
   title: string;
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
-  fullHeight?: boolean;
+  action?: React.ReactNode; // Nueva prop para acciones
 }
 
 export function SectionCard({
   icon: Icon,
   title,
   children,
-  className = "",
-  fullHeight = false,
+  className,
+  action,
 }: SectionCardProps) {
   return (
-    <Box
+    <Paper
+      elevation={0}
       sx={{
-        p: 2,
-        backgroundColor: "background.paper",
+        p: 3,
         borderRadius: 1,
-        border: 1,
+        border: "1px solid",
         borderColor: "divider",
-        marginTop: 2,
-        height: fullHeight ? "calc(100vh - 8rem)" : "auto",
       }}
+      className={className}
     >
       <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
         sx={{
-          flexDirection: { xs: "column", sm: "row" },
-          gap: { xs: 2, sm: 0 },
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 3,
         }}
       >
-        <Typography
-          variant="h6"
-          color="textPrimary"
-          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-        >
-          {Icon && <Icon size={20} />}
-          {title}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          <Icon className="h-5 w-5 mr-2" />
+          <Typography variant="h6" component="h2">
+            {title}
+          </Typography>
+        </Box>
+        {action && <Box sx={{ ml: 2 }}>{action}</Box>}
       </Box>
-
-      <Box>{children}</Box>
-    </Box>
+      {children}
+    </Paper>
   );
 }

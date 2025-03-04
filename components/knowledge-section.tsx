@@ -14,35 +14,40 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Fab,
+  IconButton,
+  LinearProgress,
   TextField,
   Typography,
 } from "@mui/material";
-import { AlertCircle, BookOpen, Plus } from "lucide-react";
+import {
+  AlertCircle,
+  BookOpen,
+  Database,
+  Edit,
+  File,
+  Plus,
+  Trash,
+  Upload,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// Define column type
-interface Column {
-  id: string;
-  label: string;
-  renderCell: (row: KnowledgeItem) => React.ReactNode;
-}
-
-// Columnas para la tabla
-const columns: Column[] = [
+// Columnas correctas para la tabla
+const columns = [
   {
     id: "name",
     label: "Nombre",
-    renderCell: (row: KnowledgeItem) => (
+    format: (value: string) => (
       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-        {row.name}
+        {value}
       </Typography>
     ),
   },
   {
     id: "description",
     label: "Descripción",
-    renderCell: (row: KnowledgeItem) => (
+    format: (value: string) => (
       <Typography
         variant="body2"
         sx={{
@@ -53,50 +58,76 @@ const columns: Column[] = [
           whiteSpace: "nowrap",
         }}
       >
-        {row.description}
+        {value || "Sin descripción"}
       </Typography>
     ),
   },
   {
-    id: "size",
-    label: "Tamaño",
-    renderCell: (row: KnowledgeItem) => (
+    id: "created_at",
+    label: "Creado",
+    format: (value: string) => (
       <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {row.size}
+        {new Date(value).toLocaleDateString()}
       </Typography>
     ),
   },
   {
-    id: "type",
-    label: "Tipo",
-    renderCell: (row: KnowledgeItem) => (
-      <Chip
-        label={row.type.toUpperCase()}
-        size="small"
-        sx={{
-          bgcolor: getTypeColor(row.type),
-          color: "#fff",
-          fontWeight: 500,
-          fontSize: "0.75rem",
-        }}
-      />
+    id: "base_name",
+    label: "Base",
+    format: (value: string) => (
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        {value || "General"}
+      </Typography>
+    ),
+  },
+  {
+    id: "actions",
+    label: "Acciones",
+    align: "right" as const,
+    sortable: false,
+    format: (value: any, row: KnowledgeItem) => (
+      <Box sx={{ display: "flex", justifyContent: "flex-end", minWidth: 110 }}>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(
+              new CustomEvent("edit-knowledge", { detail: row })
+            );
+          }}
+          sx={{ color: "primary.main", mr: 1 }}
+        >
+          <Edit size={18} />
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(
+              new CustomEvent("delete-knowledge", { detail: row })
+            );
+          }}
+          sx={{ color: "error.main" }}
+        >
+          <Trash size={18} />
+        </IconButton>
+      </Box>
     ),
   },
 ];
 
-// Función para determinar el color basado en el tipo de archivo
 function getTypeColor(type: string): string {
   switch (type.toLowerCase()) {
     case "pdf":
-      return "#e53935"; // rojo
+      return "#e53935";
     case "docx":
-      return "#1976d2"; // azul
+      return "#1976d2";
     case "md":
-      return "#7b1fa2"; // púrpura
+      return "#7b1fa2";
     case "txt":
-      return "#388e3c"; // verde
+      return "#388e3c";
     default:
-      return "#757575"; // gris
+      return "#757575";
   }
 }
 
@@ -107,8 +138,11 @@ export function KnowledgeSection() {
   const [error, setError] = useState<string | null>(null);
   const knowledgeService = KnowledgeService.getInstance();
 
-  // Estado para el modal de crear conocimiento
+  // Estados para modales y acciones
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
+  const [currentKnowledge, setCurrentKnowledge] =
+    useState<KnowledgeItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [newKnowledge, setNewKnowledge] = useState({
     name: "",
@@ -116,11 +150,25 @@ export function KnowledgeSection() {
     content: "",
   });
 
-  // Añadir estos estados
+  // Estados para carga de archivos e indexación
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [isIndexed, setIsIndexed] = useState(false);
+  const [indexProgress, setIndexProgress] = useState(0);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Otros estados existentes
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [knowledgeToDelete, setKnowledgeToDelete] =
+    useState<KnowledgeItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [selectedKnowledge, setSelectedKnowledge] =
+    useState<KnowledgeItem | null>(null);
 
-  // Función para manejar los cambios en los campos del formulario
+  // Handlers
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -128,8 +176,136 @@ export function KnowledgeSection() {
     setNewKnowledge((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Función para crear nuevo conocimiento
-  const handleCreateKnowledge = async () => {
+  // Función para manejar la selección de archivo
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setIsIndexed(false); // Reset indexing state when new file is selected
+
+      // Actualizar el nombre automáticamente con el nombre del archivo
+      setNewKnowledge((prev) => ({
+        ...prev,
+        name: file.name.split(".")[0], // Usar nombre del archivo como título
+        description: `Documento subido: ${file.name} (${(
+          file.size / 1024
+        ).toFixed(2)} KB)`,
+      }));
+    }
+  };
+
+  // Función para iniciar la indexación
+  const handleIndexFile = async () => {
+    if (!selectedFile || !session?.user?.accessToken) return;
+
+    try {
+      setIsIndexing(true);
+      setIndexProgress(0);
+      setError(null);
+
+      // Obtener token JWT para las llamadas a la API
+      const provider = session.user.provider || "github";
+      const jwtToken = await knowledgeService.exchangeToken(
+        session.user.accessToken,
+        provider
+      );
+
+      // Crear FormData para subir el archivo
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      // Llamar al endpoint de upload del backend
+      const response = await fetch(
+        `${knowledgeService.baseUrl}/api/knowledge/upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error en la carga: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("Respuesta de indexación:", data);
+
+      // Guardar el job_id para consultar estado
+      setJobId(data.job_id);
+
+      // Iniciar polling para verificar estado
+      startStatusPolling(jwtToken, data.job_id);
+    } catch (error) {
+      console.error("Error indexando archivo:", error);
+      setError(
+        error instanceof Error ? error.message : "Error indexando archivo"
+      );
+      setIsIndexing(false);
+    }
+  };
+
+  // Función para consultar estado de la indexación
+  const startStatusPolling = (token: string, jobId: string) => {
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(
+          `${knowledgeService.baseUrl}/api/knowledge/job/${jobId}/status`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Error al verificar estado: ${response.status}`);
+        }
+
+        const statusData = await response.json();
+        console.log("Estado de indexación:", statusData);
+
+        // Actualizar el progreso
+        if (statusData.progress) {
+          setIndexProgress(statusData.progress * 100);
+        }
+
+        // Verificar si se completó
+        if (statusData.status === "completed") {
+          setIsIndexed(true);
+          setIsIndexing(false);
+
+          // Actualizar el contenido con metadata del archivo
+          setNewKnowledge((prev) => ({
+            ...prev,
+            content: `${prev.content}\nArchivo indexado exitosamente. ID: ${jobId}`,
+          }));
+
+          return; // Terminar polling
+        } else if (statusData.status === "failed") {
+          throw new Error(statusData.message || "La indexación falló");
+        }
+
+        // Continuar polling
+        setTimeout(checkStatus, 2000);
+      } catch (error) {
+        console.error("Error verificando estado:", error);
+        setError(
+          error instanceof Error ? error.message : "Error verificando estado"
+        );
+        setIsIndexing(false);
+      }
+    };
+
+    // Iniciar el proceso de verificación
+    checkStatus();
+  };
+
+  const handleSaveKnowledge = async () => {
     if (!session?.user?.accessToken) {
       setError("No hay sesión activa");
       return;
@@ -146,34 +322,78 @@ export function KnowledgeSection() {
         provider
       );
 
-      // Usar el método del servicio que ahora tiene el formato correcto
-      await knowledgeService.createKnowledgeItem(
-        `Bearer ${jwtToken}`,
-        newKnowledge.name,
-        newKnowledge.description,
-        newKnowledge.content
-      );
+      // Si tenemos un jobId de indexación, incluirlo en la creación
+      const content = jobId
+        ? `${newKnowledge.content}\nFile job_id: ${jobId}`
+        : newKnowledge.content;
 
-      // Si llegamos aquí, fue exitoso
+      if (modalMode === "create") {
+        await knowledgeService.createKnowledgeItem(
+          `Bearer ${jwtToken}`,
+          newKnowledge.name,
+          newKnowledge.description,
+          content
+        );
+      } else {
+        if (!currentKnowledge) return;
+        await knowledgeService.updateKnowledgeItem(
+          `Bearer ${jwtToken}`,
+          currentKnowledge.id,
+          newKnowledge.name,
+          newKnowledge.description,
+          content
+        );
+      }
+
       setModalOpen(false);
       setNewKnowledge({ name: "", description: "", content: "" });
+      setSelectedFile(null);
+      setIsIndexed(false);
+      setJobId(null);
       fetchKnowledgeData();
     } catch (error) {
-      console.error("Error completo:", error);
+      console.error("Error al guardar conocimiento:", error);
       setError(
-        error instanceof Error ? error.message : "Error al crear conocimiento"
+        error instanceof Error ? error.message : "Error al guardar conocimiento"
       );
     } finally {
       setCreating(false);
     }
   };
 
-  // Añadir función para depurar el modelo
-  const debugKnowledgeModel = async () => {
-    if (!session?.user?.accessToken) {
-      setError("No hay sesión activa");
-      return;
+  const handleDeleteKnowledge = async () => {
+    if (!knowledgeToDelete || !session?.user?.accessToken) return;
+
+    try {
+      setDeleting(true);
+
+      const provider = session.user.provider || "github";
+      const jwtToken = await knowledgeService.exchangeToken(
+        session.user.accessToken,
+        provider
+      );
+
+      await knowledgeService.deleteKnowledgeItem(
+        `Bearer ${jwtToken}`,
+        knowledgeToDelete.id
+      );
+
+      fetchKnowledgeData();
+      setDeleteDialogOpen(false);
+    } catch (error) {
+      console.error("Error eliminando conocimiento:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Error al eliminar el conocimiento"
+      );
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const debugKnowledgeModel = async () => {
+    if (!session?.user?.accessToken) return;
 
     try {
       const provider = session.user.provider || "github";
@@ -186,9 +406,6 @@ export function KnowledgeSection() {
         `Bearer ${jwtToken}`
       );
       setDebugInfo(modelInfo);
-      console.log("Información del modelo Knowledge:", modelInfo);
-
-      // Mostrar información en el modal
       setErrorDetails(JSON.stringify(modelInfo, null, 2));
     } catch (err) {
       console.error("Error obteniendo información del modelo:", err);
@@ -196,7 +413,6 @@ export function KnowledgeSection() {
     }
   };
 
-  // Función existente para obtener datos modificada para ser reutilizable
   async function fetchKnowledgeData() {
     if (!session?.user?.accessToken) {
       setLoading(false);
@@ -208,7 +424,6 @@ export function KnowledgeSection() {
       setLoading(true);
       setError(null);
 
-      // Resto del código existente...
       const oauthToken = session.user.accessToken;
       const provider = session.user.provider || "github";
       const jwtToken = await knowledgeService.exchangeToken(
@@ -234,57 +449,143 @@ export function KnowledgeSection() {
     }
   }
 
-  // useEffect existente...
+  // Event listeners
+  useEffect(() => {
+    const handleEdit = (event: CustomEvent) => {
+      const knowledge = event.detail;
+      setCurrentKnowledge(knowledge);
+      setNewKnowledge({
+        name: knowledge.name,
+        description: knowledge.description || "",
+        content: knowledge.content || "",
+      });
+      setModalMode("edit");
+      setModalOpen(true);
+    };
+
+    const handleDelete = (event: CustomEvent) => {
+      setKnowledgeToDelete(event.detail);
+      setDeleteDialogOpen(true);
+    };
+
+    const handleRowClick = (event: CustomEvent) => {
+      setSelectedKnowledge(event.detail);
+    };
+
+    window.addEventListener("edit-knowledge", handleEdit as EventListener);
+    window.addEventListener("delete-knowledge", handleDelete as EventListener);
+    window.addEventListener(
+      "select-knowledge",
+      handleRowClick as EventListener
+    );
+
+    return () => {
+      window.removeEventListener("edit-knowledge", handleEdit as EventListener);
+      window.removeEventListener(
+        "delete-knowledge",
+        handleDelete as EventListener
+      );
+      window.removeEventListener(
+        "select-knowledge",
+        handleRowClick as EventListener
+      );
+    };
+  }, []);
+
   useEffect(() => {
     fetchKnowledgeData();
   }, [session]);
 
-  useEffect(() => {
-    // Verificar que el token está presente
-    console.log("¿Hay token?", !!session?.user?.accessToken);
-    console.log("Token:", session?.user?.accessToken?.substring(0, 15) + "...");
-
-    // Probar con Fetch directamente
-    if (session?.user?.accessToken) {
-      const token = session.user.accessToken;
-      fetch("http://localhost:8000/users/profile", {
-        headers: {
-          Authorization: token.startsWith("Bearer ")
-            ? token
-            : `Bearer ${token}`,
-        },
-      })
-        .then((res) => {
-          console.log("Status de profile:", res.status);
-          if (!res.ok) return res.text();
-          return res.json();
-        })
-        .then((data) => console.log("Datos:", data))
-        .catch((err) => console.error("Error fetch:", err));
-    }
-  }, [session]);
-
   return (
-    <SectionCard icon={BookOpen} title="Knowledge Base">
-      {/* Botón para añadir nuevo conocimiento */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button
-          variant="contained"
-          startIcon={<Plus size={18} />}
-          onClick={() => setModalOpen(true)}
-        >
-          Agregar conocimiento
-        </Button>
-      </Box>
+    <Box position="relative">
+      <SectionCard
+        icon={BookOpen}
+        title="Knowledge Base"
+        action={
+          <Fab
+            color="primary"
+            size="medium"
+            aria-label="add"
+            onClick={() => {
+              setModalMode("create");
+              setCurrentKnowledge(null);
+              setNewKnowledge({ name: "", description: "", content: "" });
+              setModalOpen(true);
+            }}
+            sx={{ boxShadow: 2 }}
+          >
+            <Plus size={24} />
+          </Fab>
+        }
+      >
+        {error && (
+          <Alert
+            severity="error"
+            icon={<AlertCircle size={20} />}
+            sx={{ mt: 2, mb: 2 }}
+          >
+            {error}
+          </Alert>
+        )}
 
-      {/* Modal para crear nuevo conocimiento */}
+        <Box sx={{ mt: 2, position: "relative" }}>
+          {loading && (
+            <Box
+              sx={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(13, 17, 23, 0.7)",
+                zIndex: 1,
+                borderRadius: 1,
+              }}
+            >
+              <CircularProgress size={40} />
+            </Box>
+          )}
+
+          <DataTable
+            columns={columns}
+            rows={knowledgeData}
+            rowsPerPageOptions={[3, 5, 10]}
+            title="Documentos de conocimiento"
+            onRowClick={(row) => {
+              setSelectedKnowledge(row);
+              window.dispatchEvent(
+                new CustomEvent("select-knowledge", { detail: row })
+              );
+            }}
+          />
+
+          {!loading && !error && knowledgeData.length === 0 && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ textAlign: "center", mt: 2 }}
+            >
+              No se encontraron documentos de conocimiento.
+            </Typography>
+          )}
+        </Box>
+      </SectionCard>
+
+      {/* Modal de creación/edición */}
       <Dialog
         open={modalOpen}
-        onClose={() => !creating && setModalOpen(false)}
+        onClose={() => !creating && !isIndexing && setModalOpen(false)}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Crear nuevo conocimiento</DialogTitle>
+        <DialogTitle>
+          {modalMode === "create"
+            ? "Crear nuevo conocimiento"
+            : "Editar conocimiento"}
+        </DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -296,7 +597,7 @@ export function KnowledgeSection() {
             variant="outlined"
             value={newKnowledge.name}
             onChange={handleInputChange}
-            disabled={creating}
+            disabled={creating || isIndexing}
             sx={{ mb: 2, mt: 1 }}
           />
           <TextField
@@ -308,9 +609,97 @@ export function KnowledgeSection() {
             variant="outlined"
             value={newKnowledge.description}
             onChange={handleInputChange}
-            disabled={creating}
+            disabled={creating || isIndexing}
             sx={{ mb: 2 }}
           />
+
+          {/* Componente de carga de archivos */}
+          {modalMode === "create" && (
+            <Box
+              sx={{
+                mb: 2,
+                mt: 1,
+                border: "1px dashed grey",
+                borderRadius: 1,
+                p: 2,
+              }}
+            >
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                Subir documento (PDF, Excel, Word, etc.)
+              </Typography>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+                disabled={creating || isIndexing}
+              />
+
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  mb: 1,
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={creating || isIndexing}
+                  startIcon={<Upload size={18} />}
+                >
+                  Seleccionar archivo
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleIndexFile}
+                  disabled={!selectedFile || isIndexing || isIndexed}
+                  startIcon={
+                    isIndexing ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <Database size={18} />
+                    )
+                  }
+                >
+                  {isIndexing ? "Indexando..." : "Indexar"}
+                </Button>
+              </Box>
+
+              {selectedFile && (
+                <Box sx={{ mt: 1 }}>
+                  <Chip
+                    icon={<File size={16} />}
+                    label={`${selectedFile.name} (${(
+                      selectedFile.size / 1024
+                    ).toFixed(2)} KB)`}
+                    variant="outlined"
+                    color={isIndexed ? "success" : "default"}
+                  />
+                </Box>
+              )}
+
+              {isIndexing && (
+                <LinearProgress
+                  variant="determinate"
+                  value={indexProgress}
+                  sx={{ mt: 1 }}
+                />
+              )}
+
+              {isIndexed && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Archivo indexado correctamente
+                </Alert>
+              )}
+            </Box>
+          )}
+
           <TextField
             margin="dense"
             name="content"
@@ -321,10 +710,9 @@ export function KnowledgeSection() {
             variant="outlined"
             value={newKnowledge.content}
             onChange={handleInputChange}
-            disabled={creating}
+            disabled={creating || isIndexing}
           />
 
-          {/* Sección de información de depuración */}
           {errorDetails && (
             <Alert severity="error" sx={{ mt: 2 }}>
               <Typography variant="subtitle2">Detalles del error:</Typography>
@@ -346,81 +734,59 @@ export function KnowledgeSection() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setModalOpen(false)} disabled={creating}>
+          <Button
+            onClick={() => setModalOpen(false)}
+            disabled={creating || isIndexing}
+          >
             Cancelar
           </Button>
           <Button
-            onClick={debugKnowledgeModel}
-            color="info"
-            disabled={creating}
-          >
-            Debug
-          </Button>
-          <Button
-            onClick={handleCreateKnowledge}
+            onClick={handleSaveKnowledge}
             variant="contained"
-            disabled={creating || !newKnowledge.name}
+            disabled={
+              creating || !newKnowledge.name || (selectedFile && !isIndexed) // Deshabilitar si hay archivo pero no está indexado
+            }
             startIcon={creating ? <CircularProgress size={20} /> : null}
           >
-            {creating ? "Creando..." : "Crear"}
+            {creating
+              ? "Guardando..."
+              : modalMode === "create"
+              ? "Crear"
+              : "Actualizar"}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Si hay error, mostrar alerta pero mantener la tabla */}
-      {error && (
-        <Alert
-          severity="error"
-          icon={<AlertCircle size={20} />}
-          sx={{ mt: 2, mb: 2 }}
-        >
-          {error}
-        </Alert>
-      )}
-
-      {/* Siempre mostrar la tabla, incluso si está vacía o hay errores */}
-      <Box sx={{ mt: 2, position: "relative" }}>
-        {/* Overlay de carga si está cargando */}
-        {loading && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(13, 17, 23, 0.7)",
-              zIndex: 1,
-              borderRadius: 1,
-            }}
-          >
-            <CircularProgress size={40} />
-          </Box>
-        )}
-
-        <DataTable
-          columns={columns}
-          rows={knowledgeData}
-          rowsPerPageOptions={[3, 5, 10]}
-          title="Documentos de conocimiento"
-          // El componente DataTable maneja automáticamente el caso de que no hay datos
-          // mostrando un mensaje "No results found" en la tabla vacía
-        />
-
-        {/* Mensaje cuando no hay datos (solo mostrar si no está cargando y no hay error) */}
-        {!loading && !error && knowledgeData.length === 0 && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ textAlign: "center", mt: 2 }}
-          >
-            No se encontraron documentos de conocimiento.
+      {/* Modal de confirmación para eliminar */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Confirmar eliminación</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Estás seguro de que deseas eliminar "{knowledgeToDelete?.name}"?
+            Esta acción no se puede deshacer.
           </Typography>
-        )}
-      </Box>
-    </SectionCard>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleting}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleDeleteKnowledge}
+            color="error"
+            variant="contained"
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={20} /> : null}
+          >
+            {deleting ? "Eliminando..." : "Eliminar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

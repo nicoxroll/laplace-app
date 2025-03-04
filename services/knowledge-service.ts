@@ -154,6 +154,93 @@ export class KnowledgeService {
   }
 
   /**
+   * Actualiza un item de conocimiento existente
+   */
+  public async updateKnowledgeItem(
+    token: string,
+    knowledgeId: string,
+    name: string,
+    description: string,
+    content: string
+  ): Promise<KnowledgeItem> {
+    try {
+      const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+      // Formato correcto que coincide con lo que espera el backend
+      const requestBody = {
+        name,
+        description,
+        content, // El backend genera content_hash y vector_ids
+      };
+
+      console.log("Enviando actualización:", JSON.stringify(requestBody));
+
+      // Asegurar que el ID es un número si viene como string
+      const numericId =
+        typeof knowledgeId === "string" ? parseInt(knowledgeId) : knowledgeId;
+
+      const response = await fetch(
+        `${this.baseUrl}/knowledge/items/${numericId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      const responseText = await response.text();
+      console.log("Respuesta del servidor:", responseText);
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status} ${responseText}`);
+      }
+
+      return JSON.parse(responseText);
+    } catch (error) {
+      console.error("Error updating knowledge:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un item de conocimiento
+   */
+  public async deleteKnowledgeItem(
+    token: string,
+    knowledgeId: string
+  ): Promise<void> {
+    try {
+      const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+      // Asegurar que el ID es un número si viene como string
+      const numericId =
+        typeof knowledgeId === "string" ? parseInt(knowledgeId) : knowledgeId;
+
+      const response = await fetch(
+        `${this.baseUrl}/knowledge/items/${numericId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        throw new Error(`Error: ${response.status} ${responseText}`);
+      }
+    } catch (error) {
+      console.error("Error deleting knowledge:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Obtiene información de depuración sobre el modelo Knowledge
    */
   public async getKnowledgeModelInfo(token: string): Promise<any> {
@@ -170,6 +257,88 @@ export class KnowledgeService {
       return await response.json();
     } catch (error) {
       console.error("Error getting model info:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene todas las bases de conocimiento disponibles
+   */
+  public async getKnowledgeBases(token: string): Promise<any[]> {
+    try {
+      const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+      const response = await fetch(`${this.baseUrl}/knowledge/bases`, {
+        headers: {
+          Authorization: authToken,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Error al obtener bases de conocimiento: ${response.statusText}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error obteniendo bases de conocimiento:", error);
+      return [];
+    }
+  }
+
+  // Añadir estos métodos al KnowledgeService
+
+  /**
+   * Verifica el estado de un trabajo de indexación
+   */
+  public async checkJobStatus(token: string, jobId: string): Promise<any> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/knowledge/job/${jobId}/status`,
+        {
+          headers: {
+            Authorization: token,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error al verificar estado: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error verificando estado:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sube un archivo para indexación
+   */
+  public async uploadFile(token: string, file: File): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${this.baseUrl}/api/knowledge/upload`, {
+        method: "POST",
+        headers: {
+          Authorization: token,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error en la carga: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error subiendo archivo:", error);
       throw error;
     }
   }
