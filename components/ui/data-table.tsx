@@ -37,9 +37,11 @@ interface DataTableProps {
 
 type Order = "asc" | "desc";
 
+// Modificación del componente DataTable para manejar casos donde rows puede ser undefined
+
 export function DataTable({
   columns,
-  rows,
+  rows = [], // Asegurar un valor por defecto
   rowsPerPageOptions = [10, 25, 100],
   title,
 }: DataTableProps) {
@@ -49,14 +51,17 @@ export function DataTable({
   const [orderBy, setOrderBy] = useState<string>("");
   const [order, setOrder] = useState<Order>("asc");
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (
+    _: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number
+  ) => {
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setRowsPerPage(+event.target.value);
+    setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
@@ -68,9 +73,12 @@ export function DataTable({
 
   // Filtrar filas según el término de búsqueda
   const filteredRows = useMemo(() => {
-    if (!searchTerm) return rows;
+    // Asegurar que rows siempre sea un array
+    const safeRows = Array.isArray(rows) ? rows : [];
 
-    return rows.filter((row) =>
+    if (!searchTerm) return safeRows;
+
+    return safeRows.filter((row) =>
       Object.entries(row).some(([key, value]) => {
         // Solo buscar en propiedades que son columnas
         if (!columns.find((col) => col.id === key)) return false;
@@ -85,9 +93,12 @@ export function DataTable({
 
   // Ordenar filas
   const sortedRows = useMemo(() => {
-    if (!orderBy) return filteredRows;
+    // Asegurar que filteredRows siempre sea un array
+    const rowsToSort = filteredRows || [];
 
-    return [...filteredRows].sort((a, b) => {
+    if (!orderBy) return rowsToSort;
+
+    return [...rowsToSort].sort((a, b) => {
       const aValue = a[orderBy];
       const bValue = b[orderBy];
 
@@ -111,11 +122,18 @@ export function DataTable({
 
   // Paginar filas
   const paginatedRows = useMemo(() => {
-    return sortedRows.slice(
+    // Asegurar que sortedRows siempre sea un array
+    const rowsToPage = sortedRows || [];
+
+    return rowsToPage.slice(
       page * rowsPerPage,
       page * rowsPerPage + rowsPerPage
     );
   }, [sortedRows, page, rowsPerPage]);
+
+  // Asegurar que rows siempre sea array en el cálculo de emptyRows
+  const emptyRows =
+    page > 0 ? Math.max(0, (1 + page) * rowsPerPage - (rows?.length || 0)) : 0;
 
   return (
     <Paper
@@ -278,7 +296,7 @@ export function DataTable({
         <TablePagination
           rowsPerPageOptions={rowsPerPageOptions}
           component="div"
-          count={sortedRows.length}
+          count={(sortedRows || []).length} // Protección contra undefined
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}

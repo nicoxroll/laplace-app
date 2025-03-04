@@ -1,3 +1,4 @@
+import { Repository } from "@/types/repository";
 import { KnowledgeItem } from "@/types/sections";
 
 export class KnowledgeService {
@@ -115,7 +116,8 @@ export class KnowledgeService {
     token: string,
     name: string,
     description: string,
-    content: string
+    content: string,
+    repository_id?: string | number
   ): Promise<KnowledgeItem> {
     try {
       const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
@@ -125,7 +127,7 @@ export class KnowledgeService {
         name,
         description,
         content,
-        // No incluir content_hash, será generado en el backend
+        repository_id: repository_id || null,
       };
 
       console.log("Enviando solicitud:", JSON.stringify(requestBody));
@@ -158,10 +160,11 @@ export class KnowledgeService {
    */
   public async updateKnowledgeItem(
     token: string,
-    knowledgeId: string,
+    id: number,
     name: string,
     description: string,
-    content: string
+    content: string,
+    repository_id?: string | number
   ): Promise<KnowledgeItem> {
     try {
       const authToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
@@ -171,13 +174,13 @@ export class KnowledgeService {
         name,
         description,
         content, // El backend genera content_hash y vector_ids
+        repository_id: repository_id || null,
       };
 
       console.log("Enviando actualización:", JSON.stringify(requestBody));
 
       // Asegurar que el ID es un número si viene como string
-      const numericId =
-        typeof knowledgeId === "string" ? parseInt(knowledgeId) : knowledgeId;
+      const numericId = typeof id === "string" ? parseInt(id) : id;
 
       const response = await fetch(
         `${this.baseUrl}/knowledge/items/${numericId}`,
@@ -339,6 +342,30 @@ export class KnowledgeService {
       return await response.json();
     } catch (error) {
       console.error("Error subiendo archivo:", error);
+      throw error;
+    }
+  }
+
+  // Añadir método para obtener repositorios
+  public async getRepositories(token: string): Promise<Repository[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/knowledge/repositories`,
+        {
+          headers: {
+            Authorization: token,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${await response.text()}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching repositories:", error);
       throw error;
     }
   }

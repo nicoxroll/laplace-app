@@ -228,11 +228,26 @@ export function AgentsSection({ repository }: { repository: any }) {
         onClose={() => !creating && setModalOpen(false)}
         fullWidth
         maxWidth="sm"
+        PaperProps={{
+          sx: {
+            backgroundColor: "background.paper",
+            color: "text.primary",
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+          },
+        }}
       >
-        <DialogTitle>
+        <DialogTitle
+          sx={{
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.default",
+          }}
+        >
           {modalMode === "create" ? "Crear nuevo agente" : "Editar agente"}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ bgcolor: "background.paper", pt: 2 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -244,7 +259,10 @@ export function AgentsSection({ repository }: { repository: any }) {
             value={newAgent.name}
             onChange={handleInputChange}
             disabled={creating}
-            sx={{ mb: 2, mt: 1 }}
+            sx={{
+              mb: 2,
+              mt: 1,
+            }}
           />
           <TextField
             margin="dense"
@@ -256,7 +274,9 @@ export function AgentsSection({ repository }: { repository: any }) {
             value={newAgent.description}
             onChange={handleInputChange}
             disabled={creating}
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+            }}
           />
 
           {/* Nuevo campo para API URL */}
@@ -270,7 +290,9 @@ export function AgentsSection({ repository }: { repository: any }) {
             value={newAgent.api_url || ""}
             onChange={handleInputChange}
             disabled={creating}
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+            }}
           />
 
           {/* Knowledge Base Autocomplete */}
@@ -295,7 +317,6 @@ export function AgentsSection({ repository }: { repository: any }) {
                 label="Conocimiento asociado (opcional)"
                 placeholder="Seleccionar items de conocimiento"
                 margin="dense"
-                // Eliminar el error cuando está vacío
               />
             )}
             renderTags={(value, getTagProps) =>
@@ -312,22 +333,39 @@ export function AgentsSection({ repository }: { repository: any }) {
                 );
               })
             }
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+            }}
             limitTags={3}
             filterSelectedOptions
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setModalOpen(false)} disabled={creating}>
+        <DialogActions
+          sx={{
+            p: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.default",
+          }}
+        >
+          <Button
+            onClick={() => setModalOpen(false)}
+            disabled={creating}
+            sx={{
+              color: "text.secondary",
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+          >
             Cancelar
           </Button>
           <Button
             onClick={handleSaveAgent}
             variant="contained"
-            disabled={
-              creating || !newAgent.name // Solo el nombre es obligatorio
-            }
+            disabled={creating || !newAgent.name}
             startIcon={creating ? <CircularProgress size={20} /> : null}
+            color="success"
           >
             {creating
               ? "Guardando..."
@@ -342,18 +380,48 @@ export function AgentsSection({ repository }: { repository: any }) {
       <Dialog
         open={deleteDialogOpen}
         onClose={() => !deleting && setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: "background.paper",
+            color: "text.primary",
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+          },
+        }}
       >
-        <DialogTitle>Confirmar eliminación</DialogTitle>
-        <DialogContent>
+        <DialogTitle
+          sx={{
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.default",
+          }}
+        >
+          Confirmar eliminación
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: "background.paper", pt: 2, mt: 1 }}>
           <Typography>
             ¿Estás seguro de que deseas eliminar el agente "
             {agentToDelete?.name}"? Esta acción no se puede deshacer.
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            p: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.default",
+          }}
+        >
           <Button
             onClick={() => setDeleteDialogOpen(false)}
             disabled={deleting}
+            sx={{
+              color: "text.secondary",
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
           >
             Cancelar
           </Button>
